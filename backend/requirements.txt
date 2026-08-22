@@ -1,0 +1,18 @@
+# ACS Control
+# Known-good dependency versions.
+#
+# Validated with:
+# Python 3.13.5
+#
+# Update these versions deliberately and test ACS Control
+# before committing dependency upgrades.
+
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+httpx==0.28.1
+SQLAlchemy==2.0.52
+asyncpg==0.31.0
+redis==8.1.0
+pydantic==2.13.4
+pydantic-settings==2.15.0
+python-dotenv==1.2.3
