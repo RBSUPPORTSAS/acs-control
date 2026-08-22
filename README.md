@@ -30,6 +30,22 @@ Contributions from developers, network engineers, vendors and AI coding agents a
 
 Read [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) before changing device-management logic.
 
+## Installation
+
+Para una instalación completa en Debian, incluyendo dependencias, PostgreSQL,
+Redis, FastAPI, Vue 3, systemd y Nginx:
+
+[Guía completa de instalación](docs/INSTALL.md)
+
+Quick clone:
+
+```bash
+git clone https://github.com/RBSUPPORTSAS/acs-control.git
+cd acs-control
+```
+
+Luego siga la guía de instalación.
+
 ## Quick start
 
 ```bash
