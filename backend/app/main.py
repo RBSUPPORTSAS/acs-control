@@ -194,7 +194,7 @@ async def device_wifi(device_id: str):
 # ACS_CATV_ENDPOINT
 @app.get("/api/devices/{device_id}/catv")
 async def device_catv(device_id: str):
-    from app.services.catv_reader import read_catv
+    from app.services.catv_reader import read_catv, resolve_catv_profile
 
     device = await genieacs.get_device(device_id)
 
@@ -268,7 +268,7 @@ async def change_catv(
 ):
     import asyncio
 
-    from app.services.catv_reader import read_catv
+    from app.services.catv_reader import read_catv, resolve_catv_profile
     from app.services.audit_service import (
         add_audit,
         update_audit,
@@ -289,7 +289,25 @@ async def change_catv(
         )
 
     before = read_catv(device)
-    requested = "1" if action == "on" else "0"
+    profile = resolve_catv_profile(device)
+
+    if not profile:
+        raise HTTPException(
+            status_code=400,
+            detail="CATV no soportado por esta ONU"
+        )
+
+    if not profile.get("writable"):
+        raise HTTPException(
+            status_code=400,
+            detail="CATV detectado, pero el parámetro no es escribible"
+        )
+
+    requested = (
+        profile["on_value"]
+        if action == "on"
+        else profile["off_value"]
+    )
 
     audit = await add_audit(
         db=db,
@@ -312,9 +330,9 @@ async def change_catv(
     try:
         task = await genieacs.set_parameter_value(
             device_id,
-            "InternetGatewayDevice.DeviceInfo.Catv.Enable",
+            profile["parameter"],
             requested,
-            "xsd:string"
+            profile["value_type"]
         )
 
     except Exception as exc:
@@ -346,7 +364,7 @@ async def change_catv(
         current = read_catv(current_device)
         confirmed_value = current.get("enabled")
 
-        if str(confirmed_value) == requested:
+        if str(confirmed_value) == str(requested):
 
             await update_audit(
                 db,
