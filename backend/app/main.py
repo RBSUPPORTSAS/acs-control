@@ -575,6 +575,9 @@ async def create_pppoe_wan(
 
     from app.services.wan_create import create_pppoe
     from app.services.wan_reader import read_wan
+    from app.services.wan_driver import detect_wan_driver
+    from app.services.x_catv_wan_creator import create_x_catv_pppoe
+    from app.services.x_ctcom_wan_creator import create_x_ctcom_pppoe
     from app.services.audit_service import (
         add_audit,
         update_audit,
@@ -618,10 +621,27 @@ async def create_pppoe_wan(
 
     try:
 
-        result = await create_pppoe(
-            device_id,
-            payload
-        )
+        driver = detect_wan_driver(device)
+
+        if driver == "x_catv_wan":
+            result = await create_x_catv_pppoe(
+                genieacs,
+                device_id,
+                payload,
+            )
+
+        elif driver == "x_ctcom_wan":
+            result = await create_x_ctcom_pppoe(
+                genieacs,
+                device_id,
+                payload,
+            )
+
+        else:
+            result = await create_pppoe(
+                device_id,
+                payload
+            )
 
         if result["status"] == 202:
 
@@ -1326,6 +1346,9 @@ async def create_dhcp_wan(
 
     from app.services.wan_create import create_dhcp
     from app.services.wan_reader import read_wan
+    from app.services.wan_driver import detect_wan_driver
+    from app.services.x_catv_wan_creator import create_x_catv_dhcp
+    from app.services.x_ctcom_wan_creator import create_x_ctcom_dhcp
     from app.services.audit_service import add_audit, update_audit
 
     device = await genieacs.get_device(device_id)
@@ -1362,7 +1385,27 @@ async def create_dhcp_wan(
     )
 
     try:
-        result = await create_dhcp(device_id, payload)
+        driver = detect_wan_driver(device)
+
+        if driver == "x_catv_wan":
+            result = await create_x_catv_dhcp(
+                genieacs,
+                device_id,
+                payload,
+            )
+
+        elif driver == "x_ctcom_wan":
+            result = await create_x_ctcom_dhcp(
+                genieacs,
+                device_id,
+                payload,
+            )
+
+        else:
+            result = await create_dhcp(
+                device_id,
+                payload
+            )
 
         if result["status"] == 202:
             await update_audit(
@@ -2724,6 +2767,7 @@ async def edit_wifi(
 
     try:
         values, requested = build_wifi_changes(
+            device,
             index,
             payload
         )
