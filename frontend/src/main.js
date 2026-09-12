@@ -1387,7 +1387,14 @@ function catvState(value) {
                     )
                 }
 
-                await openWan()
+                const deleted =
+                    await waitWanDeleted(connection)
+
+                if (!deleted) {
+                    alert(
+                        'La eliminación fue enviada, pero GenieACS aún no actualiza el inventario.'
+                    )
+                }
 
             } catch (e) {
 
@@ -1660,6 +1667,52 @@ function catvState(value) {
             }
         }
 
+        async function waitWanDeleted(connection) {
+
+            const id = encodeURIComponent(
+                selectedDevice.value.id
+            )
+
+            for (let attempt = 0; attempt < 6; attempt++) {
+
+                const r = await fetch(
+                    `/api/devices/${id}/wan`,
+                    { cache: 'no-store' }
+                )
+
+                if (r.ok) {
+
+                    const data = await r.json()
+
+                    wan.value = data
+
+                    const exists = (
+                        data.wan || []
+                    ).some(
+                        item =>
+                            item.wan_connection_device
+                                === connection.wan_connection_device
+                            &&
+                            item.object_type
+                                === connection.object_type
+                            &&
+                            item.instance
+                                === connection.instance
+                    )
+
+                    if (!exists)
+                        return true
+                }
+
+                await new Promise(
+                    resolve => setTimeout(resolve, 2000)
+                )
+            }
+
+            return false
+        }
+
+
         function serviceText(services) {
             if (!services || !services.length)
                 return '-'
@@ -1716,22 +1769,31 @@ function catvState(value) {
 
         function wifiChannels(index) {
 
-            if (Number(index) === 5) {
+            const form =
+                wifiForms.value[index]
 
+            if (!form)
+                return []
+
+            if (form.band === '2.4 GHz') {
                 return [
                     1, 2, 3, 4, 5, 6,
                     7, 8, 9, 10, 11
                 ]
             }
 
-            return [
-                36, 40, 44, 48,
-                52, 56, 60, 64,
-                100, 104, 108, 112,
-                116,
-                136, 140,
-                149, 153, 157, 161
-            ]
+            if (form.band === '5 GHz') {
+                return [
+                    36, 40, 44, 48,
+                    52, 56, 60, 64,
+                    100, 104, 108, 112,
+                    116,
+                    136, 140,
+                    149, 153, 157, 161
+                ]
+            }
+
+            return []
         }
 
 
@@ -1767,18 +1829,22 @@ function catvState(value) {
                 const raw = data.wifi || {}
                 const forms = {}
 
-                const radios = [
-                    {
-                        index: 1,
-                        band: '5 GHz',
-                        data: raw['5ghz']
-                    },
-                    {
-                        index: 5,
-                        band: '2.4 GHz',
-                        data: raw['2_4ghz']
-                    }
-                ]
+                const radios = Object
+                    .values(raw)
+                    .filter(
+                        radio =>
+                            radio
+                            && radio.supported
+                            && radio.index !== null
+                            && radio.index !== undefined
+                    )
+                    .map(
+                        radio => ({
+                            index: Number(radio.index),
+                            band: radio.band,
+                            data: radio
+                        })
+                    )
 
                 for (const radio of radios) {
 
@@ -4670,9 +4736,7 @@ function formatDate(value) {
                                 >
 
                                     <template
-                                        v-for="
-                                            index in [1, 5]
-                                        "
+                                        v-for="(form, index) in wifiForms"
                                         :key="index"
                                     >
 
