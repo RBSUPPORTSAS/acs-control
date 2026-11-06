@@ -613,13 +613,78 @@ const manufacturerOptions = computed(() => {
         // ====================================================
 
         
+        // Filtro de la auditoria: '' (todo), SESION, USUARIO u ONU
+        const auditFilter = ref('')
+
+        const AUDIT_FILTERS = [
+            { value: '', label: 'Todo' },
+            { value: 'SESION', label: 'Sesiones' },
+            { value: 'USUARIO', label: 'Usuarios' },
+            { value: 'ONU', label: 'ONUs' }
+        ]
+
+        const AUDIT_LABELS = {
+            SESION_INICIO: 'Inicio de sesión',
+            SESION_CIERRE: 'Cierre de sesión',
+            SESION_FALLIDA: 'Intento de inicio fallido',
+            SESION_BLOQUEADA: 'Inicio bloqueado por intentos',
+            USUARIO_CREAR: 'Usuario creado',
+            USUARIO_EDITAR: 'Usuario editado',
+            USUARIO_CAMBIAR_ROL: 'Cambio de rol',
+            USUARIO_CAMBIAR_CONTRASENA: 'Cambio de contraseña',
+            USUARIO_ACTIVAR: 'Usuario activado',
+            USUARIO_DESACTIVAR: 'Usuario desactivado',
+            USUARIO_ELIMINAR: 'Usuario eliminado',
+            ETIQUETA_AGREGAR: 'Etiqueta agregada',
+            ETIQUETA_QUITAR: 'Etiqueta quitada',
+            WIFI_EDITAR: 'Wi-Fi editado',
+            CATV_ACTIVAR: 'CATV activado',
+            CATV_DESACTIVAR: 'CATV desactivado',
+            WAN_CREAR_PPPOE: 'WAN PPPoE creada',
+            WAN_CREAR_DHCP: 'WAN DHCP creada',
+            WAN_CREAR_VSOL_PPPOE: 'WAN PPPoE creada (VSOL)',
+            WAN_CREAR_VSOL_DHCP: 'WAN DHCP creada (VSOL)',
+            WAN_CREAR_VSOL_STATIC: 'WAN estática creada (VSOL)',
+            WAN_EDITAR_PPPOE: 'WAN PPPoE editada',
+            WAN_EDITAR_PPPOE_WCD: 'WAN PPPoE editada',
+            WAN_EDITAR_IP: 'WAN IP editada',
+            WAN_ELIMINAR_PPPOE: 'WAN PPPoE eliminada',
+            WAN_ELIMINAR_WCD: 'WAN eliminada',
+            SEGURIDAD_FIREWALL_NIVEL: 'Nivel de firewall',
+            SEGURIDAD_SERVICIO: 'Servicio de seguridad'
+        }
+
+        function auditResultClass(result) {
+            const r = String(result || '').toUpperCase()
+            if (['OK', 'CONFIRMADO', 'ENVIADO'].includes(r)) return 'ok'
+            if (['FALLIDO', 'ERROR'].includes(r)) return 'error'
+            return ''
+        }
+
+        function auditLabel(action) {
+            return AUDIT_LABELS[action] || action
+        }
+
+        function auditTargetType(type) {
+            return { SESION: 'Sesión', USUARIO: 'Usuario', ONU: 'ONU' }[type] || type || '-'
+        }
+
+        async function setAuditFilter(value) {
+            auditFilter.value = value
+            await openAudit()
+        }
+
         async function openAudit() {
             auditOpen.value = true
             auditLoading.value = true
 
             try {
+                const tipo = auditFilter.value
+                    ? `&tipo=${encodeURIComponent(auditFilter.value)}`
+                    : ''
+
                 const r = await fetch(
-                    '/api/audit?limit=200',
+                    `/api/audit?limit=300${tipo}`,
                     { cache: 'no-store' }
                 )
 
@@ -645,8 +710,17 @@ const manufacturerOptions = computed(() => {
             if (value === null || value === undefined)
                 return '-'
 
-            if (typeof value === 'object')
-                return JSON.stringify(value)
+            if (typeof value === 'object') {
+                const entries = Object.entries(value)
+                    .filter(([, v]) => v !== null && v !== '')
+
+                if (!entries.length)
+                    return '-'
+
+                return entries
+                    .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
+                    .join(' · ')
+            }
 
             return String(value)
         }
@@ -2777,6 +2851,32 @@ function formatDate(value) {
             }
         }
 
+        async function deleteUser(user) {
+
+            const typed = prompt(
+                `Se eliminará el usuario ${user.username} y se cerrarán sus sesiones.\n` +
+                `Su historial en la auditoría se conserva.\n\n` +
+                `Escriba ${user.username} para confirmar:`
+            )
+
+            if (typed !== user.username)
+                return
+
+            userBusy.value = true
+            usersError.value = ''
+
+            try {
+                await usersRequest(`/api/users/${user.id}`, { method: 'DELETE' })
+                await loadUsers()
+
+            } catch (e) {
+                usersError.value = e.message
+
+            } finally {
+                userBusy.value = false
+            }
+        }
+
         async function resetUserPassword(user) {
 
             const password = prompt(
@@ -2838,6 +2938,7 @@ function formatDate(value) {
             createUser,
             updateUser,
             resetUserPassword,
+            deleteUser,
             devices,
             loading,
             error,
@@ -2851,6 +2952,12 @@ function formatDate(value) {
             openAudit,
             closeAudit,
             auditValue,
+            auditFilter,
+            AUDIT_FILTERS,
+            auditLabel,
+            auditResultClass,
+            auditTargetType,
+            setAuditFilter,
 
             selectedDevice,
             detailLoading,
@@ -4260,6 +4367,15 @@ function formatDate(value) {
                                     >
                                         {{ u.active ? 'Desactivar' : 'Activar' }}
                                     </button>
+
+                                    <button
+                                        class="users-delete"
+                                        :disabled="userBusy || u.id === currentUser.id"
+                                        :title="u.id === currentUser.id ? 'No puede eliminar su propio usuario' : 'Eliminar usuario'"
+                                        @click="deleteUser(u)"
+                                    >
+                                        Eliminar
+                                    </button>
                                 </td>
                             </tr>
                         </tbody>
@@ -4569,9 +4685,21 @@ function formatDate(value) {
                         <div>
                             <h2>Auditoría</h2>
                             <p>
-                                Historial de operaciones realizadas
-                                desde ACS Control
+                                Movimientos de los usuarios: sesiones,
+                                gestión de usuarios y cambios en las ONUs
                             </p>
+
+                            <div class="audit-filters">
+                                <button
+                                    v-for="f in AUDIT_FILTERS"
+                                    :key="f.value"
+                                    class="audit-filter"
+                                    :class="{ active: auditFilter === f.value }"
+                                    @click="setAuditFilter(f.value)"
+                                >
+                                    {{ f.label }}
+                                </button>
+                            </div>
                         </div>
 
                         <div class="audit-actions">
@@ -4612,7 +4740,7 @@ function formatDate(value) {
                                 <tr>
                                     <th>Fecha</th>
                                     <th>Acción</th>
-                                    <th>Dispositivo</th>
+                                    <th>Sobre</th>
                                     <th>Antes</th>
                                     <th>Después</th>
                                     <th>Resultado</th>
@@ -4632,11 +4760,20 @@ function formatDate(value) {
 
                                     <td>
                                         <strong>
-                                            {{ row.action }}
+                                            {{ auditLabel(row.action) }}
                                         </strong>
+                                        <small
+                                            v-if="row.message"
+                                            class="audit-message"
+                                        >
+                                            {{ row.message }}
+                                        </small>
                                     </td>
 
                                     <td class="serial">
+                                        <small class="audit-type">
+                                            {{ auditTargetType(row.target_type) }}
+                                        </small>
                                         {{ row.target_id }}
                                     </td>
 
@@ -4651,7 +4788,7 @@ function formatDate(value) {
                                     <td>
                                         <span
                                             class="audit-result"
-                                            :class="row.result" "
+                                            :class="auditResultClass(row.result)"
                                         >
                                             {{ row.result }}
                                         </span>

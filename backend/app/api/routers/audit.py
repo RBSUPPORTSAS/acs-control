@@ -15,11 +15,14 @@ router = APIRouter()
 @router.get("/api/audit")
 async def audit_list(
     limit: int = 100,
+    tipo: str | None = None,
+    usuario: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     from app.services.audit_service import get_audits
 
-    rows = await get_audits(db, limit)
+    limit = max(1, min(limit, 1000))
+    rows = await get_audits(db, limit, target_type=tipo, username=usuario)
 
     return {
         "count": len(rows),

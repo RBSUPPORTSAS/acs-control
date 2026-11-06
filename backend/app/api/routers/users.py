@@ -1,6 +1,6 @@
 """Gestion de usuarios (solo admin)."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +9,7 @@ from app.api.deps import require_admin
 from app.core.database import get_db
 from app.core.security import delete_user_sessions, hash_password, validate_password
 from app.models.user import ROLES, User
+from app.services.audit_service import log_event
 
 
 router = APIRouter()
@@ -60,6 +61,7 @@ async def list_users(
 @router.post("/api/users", status_code=201)
 async def create_user(
     payload: UserCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
 ):
@@ -92,6 +94,12 @@ async def create_user(
     db.add(user)
     await db.commit()
     await db.refresh(user)
+
+    await log_event(
+        db, "USUARIO_CREAR", "USUARIO", user.username, request,
+        after={"rol": user.role, "nombre": user.full_name},
+    )
+
     return {"user": user_row(user)}
 
 
@@ -99,6 +107,7 @@ async def create_user(
 async def update_user(
     user_id: int,
     payload: UserUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     me: User = Depends(require_admin),
 ):
@@ -106,6 +115,8 @@ async def update_user(
 
     if not user:
         raise HTTPException(404, "Usuario no encontrado")
+
+    before = {"rol": user.role, "activo": user.active, "nombre": user.full_name}
 
     loses_admin = (
         user.role == "admin" and user.active
@@ -135,6 +146,27 @@ async def update_user(
     await db.commit()
     await db.refresh(user)
 
+    # Nunca se registra la contrasena: solo que fue cambiada.
+    after = {"rol": user.role, "activo": user.active, "nombre": user.full_name}
+    changes = {k: v for k, v in after.items() if before[k] != v}
+
+    if payload.password:
+        changes["contrasena_cambiada"] = True
+
+    if changes:
+        action = (
+            "USUARIO_DESACTIVAR" if changes.get("activo") is False
+            else "USUARIO_ACTIVAR" if changes.get("activo") is True
+            else "USUARIO_CAMBIAR_ROL" if "rol" in changes
+            else "USUARIO_CAMBIAR_CONTRASENA" if list(changes) == ["contrasena_cambiada"]
+            else "USUARIO_EDITAR"
+        )
+        await log_event(
+            db, action, "USUARIO", user.username, request,
+            before={k: before[k] for k in changes if k in before},
+            after=changes,
+        )
+
     # Cambios de rol, estado o contrasena cierran las sesiones abiertas del usuario
     # (salvo la propia sesion de quien cambia su nombre).
     if payload.role is not None or payload.active is not None or payload.password:
@@ -142,3 +174,36 @@ async def update_user(
             await delete_user_sessions(user.id)
 
     return {"user": user_row(user)}
+
+
+@router.delete("/api/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    me: User = Depends(require_admin),
+):
+    user = await db.get(User, user_id)
+
+    if not user:
+        raise HTTPException(404, "Usuario no encontrado")
+
+    if user.id == me.id:
+        raise HTTPException(409, "No puede eliminar su propio usuario")
+
+    if user.role == "admin" and user.active and await active_admin_count(db) <= 1:
+        raise HTTPException(409, "Debe quedar al menos un usuario admin activo")
+
+    removed = user_row(user)
+
+    await delete_user_sessions(user.id)
+    await db.delete(user)
+    await db.commit()
+
+    # El historial de auditoria se conserva: guarda el nombre, no una referencia.
+    await log_event(
+        db, "USUARIO_ELIMINAR", "USUARIO", removed["username"], request,
+        before={"rol": removed["role"], "activo": removed["active"], "nombre": removed["full_name"]},
+    )
+
+    return {"ok": True, "deleted": removed["username"]}

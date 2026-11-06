@@ -8,6 +8,9 @@ from app.services.genieacs import genieacs
 from app.services.device_normalizer import NORMALIZE_PROJECTION, normalize_device
 
 from app.api.deps import is_admin, require_user
+from app.core.database import get_db
+from app.services.audit_service import add_audit
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 
 
@@ -115,7 +118,11 @@ async def device_detail(
 # ACS_TAG_WRITE_08C
 
 @router.post("/api/devices/{device_id}/tags/{tag}")
-async def add_device_tag(device_id: str, tag: str):
+async def add_device_tag(
+    device_id: str,
+    tag: str,
+    db: AsyncSession = Depends(get_db),
+):
 
     tag = tag.strip()
 
@@ -132,6 +139,11 @@ async def add_device_tag(device_id: str, tag: str):
 
     await genieacs.add_tag(device_id, tag)
 
+    await add_audit(
+        db, action="ETIQUETA_AGREGAR", target_id=device_id,
+        after={"etiqueta": tag}, result="CONFIRMADO",
+    )
+
     device = await genieacs.get_device(device_id)
 
     return {
@@ -143,7 +155,11 @@ async def add_device_tag(device_id: str, tag: str):
 
 
 @router.delete("/api/devices/{device_id}/tags/{tag}")
-async def delete_device_tag(device_id: str, tag: str):
+async def delete_device_tag(
+    device_id: str,
+    tag: str,
+    db: AsyncSession = Depends(get_db),
+):
 
     device = await genieacs.get_device(device_id)
 
@@ -151,6 +167,11 @@ async def delete_device_tag(device_id: str, tag: str):
         raise HTTPException(404, "ONU no encontrada")
 
     await genieacs.remove_tag(device_id, tag)
+
+    await add_audit(
+        db, action="ETIQUETA_QUITAR", target_id=device_id,
+        before={"etiqueta": tag}, result="CONFIRMADO",
+    )
 
     device = await genieacs.get_device(device_id)
 

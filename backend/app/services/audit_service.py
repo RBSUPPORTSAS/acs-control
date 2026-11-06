@@ -8,7 +8,8 @@ async def add_audit(
     before=None, after=None,
     result="SOLICITADO",
     message=None,
-    username=None
+    username=None,
+    target_type="ONU",
 ):
     if username is None:
         username = current_username.get() or "acs-control"
@@ -16,7 +17,7 @@ async def add_audit(
     row = AuditLog(
         username=username,
         action=action,
-        target_type="ONU",
+        target_type=target_type,
         target_id=target_id,
         before_data=before,
         after_data=after,
@@ -46,12 +47,67 @@ async def update_audit(db, row, result, message=None, after=None):
     return row
 
 
-async def get_audits(db, limit=100):
+async def get_audits(db, limit=100, target_type=None, username=None):
+
+    query = select(AuditLog)
+
+    if target_type:
+        query = query.where(AuditLog.target_type == target_type)
+
+    if username:
+        query = query.where(AuditLog.username == username)
 
     r = await db.execute(
-        select(AuditLog)
+        query
         .order_by(AuditLog.id.desc())
         .limit(limit)
     )
 
     return r.scalars().all()
+
+
+def client_info(request) -> dict:
+    """IP de origen (respeta X-Forwarded-For de Nginx) y navegador."""
+
+    forwarded = request.headers.get("x-forwarded-for", "")
+    ip = forwarded.split(",")[0].strip() if forwarded else None
+
+    if not ip and request.client:
+        ip = request.client.host
+
+    return {
+        "ip": ip,
+        "navegador": (request.headers.get("user-agent") or "")[:200],
+    }
+
+
+async def log_event(
+    db,
+    action,
+    target_type,
+    target_id,
+    request=None,
+    before=None,
+    after=None,
+    result="OK",
+    message=None,
+    username=None,
+):
+    """Registra un movimiento de usuario (sesiones, gestion de usuarios, etc.)."""
+
+    after = dict(after or {})
+
+    if request is not None:
+        after.update(client_info(request))
+
+    return await add_audit(
+        db,
+        action=action,
+        target_id=target_id,
+        before=before,
+        after=after or None,
+        result=result,
+        message=message,
+        username=username,
+        target_type=target_type,
+    )

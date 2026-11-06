@@ -3108,3 +3108,64 @@ tbody tr:hover {
         padding: 4px 8px;
     }
 }
+
+
+/* ==========================================================
+   AUDITORIA: filtros y detalle
+   ========================================================== */
+
+.audit-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.audit-filter {
+    padding: 5px 12px;
+    border: 1px solid #d0d5dd;
+    border-radius: 99px;
+    background: white;
+    font: inherit;
+    font-size: 13px;
+    color: #344054;
+    cursor: pointer;
+}
+
+.audit-filter.active {
+    border-color: #444ce7;
+    background: #eef4ff;
+    color: #3538cd;
+    font-weight: 600;
+}
+
+.audit-message {
+    display: block;
+    color: #667085;
+    font-weight: 400;
+}
+
+.audit-type {
+    display: block;
+    color: #667085;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+
+/* Staff: boton eliminar */
+
+.users-actions .users-delete {
+    border-color: #fda29b;
+    color: #b42318;
+}
+
+.users-actions .users-delete:hover:not(:disabled) {
+    background: #fef3f2;
+}
+
+.users-actions button:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
