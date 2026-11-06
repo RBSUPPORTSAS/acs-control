@@ -67,7 +67,17 @@ def build_pppoe_values(wcd, instance, data):
     }
 
 
-def build_dhcp_values(wcd, instance, data):
+def build_enable_values(wcd, container, instance):
+    """Encender la conexion: va al final, cuando ya esta configurada."""
+
+    return [[
+        f"{base_wcd(wcd)}.{container}.{instance}.Enable",
+        True,
+        "xsd:boolean",
+    ]]
+
+
+def build_dhcp_values(wcd, instance, data, mode="DHCP"):
     vlan = int(data["vlan"])
     priority = int(data.get("priority", 0))
     mtu = int(data.get("mtu", 1500))
@@ -77,12 +87,17 @@ def build_dhcp_values(wcd, instance, data):
         f"WANIPConnection.{instance}"
     )
 
-    name = f"ACS_INTERNET_DHCP_R_VID_{vlan}"
+    static = mode == "STATIC"
+    name = (
+        f"ACS_INTERNET_STATIC_R_VID_{vlan}"
+        if static
+        else f"ACS_INTERNET_DHCP_R_VID_{vlan}"
+    )
 
     values = [
         [f"{base}.Enable", False, "xsd:boolean"],
         [f"{base}.ConnectionType", "IP_Routed", "xsd:string"],
-        [f"{base}.AddressingType", "DHCP", "xsd:string"],
+        [f"{base}.AddressingType", "Static" if static else "DHCP", "xsd:string"],
         [f"{base}.NATEnabled", bool(data.get("nat", True)), "xsd:boolean"],
         [f"{base}.MaxMTUSize", mtu, "xsd:unsignedInt"],
 
@@ -94,6 +109,23 @@ def build_dhcp_values(wcd, instance, data):
 
         [f"{base}.Name", name, "xsd:string"],
     ]
+
+    if static:
+        missing = [
+            key
+            for key in ("ip", "subnet_mask", "gateway", "dns")
+            if not str(data.get(key, "")).strip()
+        ]
+
+        if missing:
+            raise ValueError("Faltan datos de IP fija: " + ", ".join(missing))
+
+        values += [
+            [f"{base}.ExternalIPAddress", data["ip"], "xsd:string"],
+            [f"{base}.SubnetMask", data["subnet_mask"], "xsd:string"],
+            [f"{base}.DefaultGateway", data["gateway"], "xsd:string"],
+            [f"{base}.DNSServers", data["dns"], "xsd:string"],
+        ]
 
     bindings = data.get("bindings") or []
 

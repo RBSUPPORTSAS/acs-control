@@ -167,7 +167,7 @@ async def create_pppoe_wan(
         after={
             "vlan": vlan,
             "service": "INTERNET",
-            "enabled": False,
+            "enabled": detect_wan_driver(device) == "x_ctcom_wan",
         },
         result="SOLICITADO",
         message="Creando nueva WAN PPPoE",
@@ -239,7 +239,7 @@ async def create_pppoe_wan(
                 {
                     "vlan": vlan,
                     "service": "INTERNET",
-                    "enabled": False,
+                    "enabled": created.get("enabled"),
                     "instance": created.get("instance"),
                     "name": created.get("name"),
                 }
@@ -862,6 +862,7 @@ async def edit_pppoe_wan(
 
 # ACS_WAN_DHCP_CREATE_13B
 @router.post("/api/devices/{device_id}/wan/create-dhcp")
+@router.post("/api/devices/{device_id}/wan/create-ip")
 async def create_dhcp_wan(
     device_id: str,
     payload: dict,
@@ -894,23 +895,64 @@ async def create_dhcp_wan(
     if not 576 <= mtu <= 1500:
         raise HTTPException(400, "MTU inválido")
 
+    # /create-ip acepta addressing_type DHCP o STATIC. IP fija fuera de
+    # VSOL solo esta validada en la familia x_ctcom (p. ej. HG102DWT).
+    mode = str(payload.get("addressing_type") or "DHCP").upper()
+
+    if mode not in ("DHCP", "STATIC"):
+        raise HTTPException(400, "Tipo válido: DHCP o STATIC")
+
+    driver = detect_wan_driver(device)
+
+    if mode == "STATIC":
+        import ipaddress
+
+        if driver != "x_ctcom_wan":
+            raise HTTPException(
+                400,
+                "IP fija no está validada para este modelo de ONU",
+            )
+
+        try:
+            ipaddress.IPv4Address(str(payload.get("ip", "")).strip())
+            ipaddress.IPv4Address(str(payload.get("gateway", "")).strip())
+            ipaddress.IPv4Network(
+                f"0.0.0.0/{str(payload.get('subnet_mask', '')).strip()}"
+            )
+        except ValueError:
+            raise HTTPException(400, "IP, máscara o gateway inválidos")
+
+        if not str(payload.get("dns", "")).strip():
+            raise HTTPException(400, "Falta el DNS")
+
+    label = "Static" if mode == "STATIC" else "DHCP"
+
+    audit_after = {
+        "vlan": vlan,
+        "service": "INTERNET",
+        "type": label,
+        "enabled": driver == "x_ctcom_wan",
+    }
+
+    if mode == "STATIC":
+        audit_after.update({
+            "ip": payload.get("ip"),
+            "subnet_mask": payload.get("subnet_mask"),
+            "gateway": payload.get("gateway"),
+            "dns": payload.get("dns"),
+        })
+
     audit = await add_audit(
         db=db,
-        action="WAN_CREAR_DHCP",
+        action="WAN_CREAR_ESTATICA" if mode == "STATIC" else "WAN_CREAR_DHCP",
         target_id=device_id,
         before=None,
-        after={
-            "vlan": vlan,
-            "service": "INTERNET",
-            "type": "DHCP",
-            "enabled": False,
-        },
+        after=audit_after,
         result="SOLICITADO",
-        message="Creando nueva WAN DHCP",
+        message=f"Creando nueva WAN {label}",
     )
 
     try:
-        driver = detect_wan_driver(device)
 
         if driver == "x_catv_wan":
             result = await create_x_catv_dhcp(
@@ -924,6 +966,7 @@ async def create_dhcp_wan(
                 genieacs,
                 device_id,
                 payload,
+                mode=mode,
             )
 
         else:
@@ -965,13 +1008,13 @@ async def create_dhcp_wan(
                 db,
                 audit,
                 "CONFIRMADO",
-                "WAN DHCP creada correctamente",
+                f"WAN {label} creada correctamente",
                 {
                     "instance": created.get("instance"),
                     "name": created.get("name"),
                     "vlan": vlan,
-                    "type": "DHCP",
-                    "enabled": False,
+                    "type": label,
+                    "enabled": created.get("enabled"),
                 }
             )
 
