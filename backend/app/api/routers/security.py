@@ -49,9 +49,10 @@ async def security_module_firewall(
     import asyncio
 
     from app.services.security_module import (
-        get_acl,
+        firewall_grade,
+        firewall_source,
+        firewall_write,
         security_state,
-        to_int,
         writable,
     )
 
@@ -86,23 +87,21 @@ async def security_module_firewall(
             "ONU no encontrada"
         )
 
-    acl = get_acl(device)
+    kind, obj = firewall_source(device)
 
-    if not acl:
+    if not kind:
         raise HTTPException(
             404,
-            "AclServices no disponible"
+            "La ONU no expone el nivel de firewall"
         )
-
-    obj = acl.get("FireWallGrade")
 
     if not writable(obj):
         raise HTTPException(
             403,
-            "FireWallGrade no es escribible"
+            "El nivel de firewall no es escribible"
         )
 
-    before = to_int(obj)
+    before = firewall_grade(device)
 
     if before == grade:
         return {
@@ -129,16 +128,13 @@ async def security_module_firewall(
 
     try:
 
+        path, value, value_type = firewall_write(device, grade)
+
         await genieacs.set_parameter_value(
             device_id,
-            (
-                "InternetGatewayDevice."
-                "X_HW_Security."
-                "AclServices."
-                "FireWallGrade"
-            ),
-            grade,
-            "xsd:unsignedInt"
+            path,
+            value,
+            value_type,
         )
 
         confirmed = False

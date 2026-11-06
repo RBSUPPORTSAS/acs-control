@@ -274,3 +274,34 @@ async def test_sync_usa_candado_y_no_repite(client, genie):
     assert summary["waiting"] == [NEW_ID]
     assert "COMPLETA" not in summary["complete"]
     assert len(genie.posted) == posted
+
+
+# --- GenieACS tarda en responder ------------------------------------------------
+
+async def test_post_task_trata_timeout_como_en_cola(monkeypatch):
+    """GenieACS deja la peticion abierta mientras la ONU lee (Huawei: >18 s).
+
+    La tarea ya quedo guardada: no debe reportarse como error.
+    """
+    import httpx
+    from app.services import genieacs as genie_module
+
+    def slow(request):
+        raise httpx.ReadTimeout("", request=request)
+
+    real = httpx.AsyncClient
+
+    def client_with_slow_transport(*args, **kwargs):
+        kwargs["transport"] = httpx.MockTransport(slow)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(genie_module.httpx, "AsyncClient", client_with_slow_transport)
+
+    client = genie_module.GenieACSClient()
+    task = {"name": "refreshObject", "objectName": "InternetGatewayDevice.LANDevice"}
+
+    assert await client.post_task("X", task, connection_request=True) == 202
+
+    # Sin connection_request la tarea solo se encola: un timeout si es error.
+    with pytest.raises(httpx.TimeoutException):
+        await client.post_task("X", task, connection_request=False)
