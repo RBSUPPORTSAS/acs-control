@@ -324,12 +324,6 @@ async def delete_pppoe_wan(
             "WAN protegida: transporta TR-069 y no puede eliminarse"
         )
 
-    if wan.get("enabled"):
-        raise HTTPException(
-            409,
-            "Desactiva la WAN antes de eliminarla"
-        )
-
     audit = await add_audit(
         db=db,
         action="WAN_ELIMINAR_PPPOE",
@@ -1520,13 +1514,6 @@ async def delete_wan_wcd(
         raise HTTPException(
             403,
             "WAN protegida: el WANConnectionDevice contiene TR069"
-        )
-
-    # No borrar WCD con conexiones activas.
-    if any(w.get("enabled") for w in same_wcd):
-        raise HTTPException(
-            409,
-            "Desactiva la WAN antes de eliminarla"
         )
 
     before = {

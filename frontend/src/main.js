@@ -1333,13 +1333,6 @@ function catvState(value) {
                 return
             }
 
-            if (connection.enabled) {
-                alert(
-                    'Desactiva la WAN antes de eliminarla.'
-                )
-                return
-            }
-
             const confirmation = prompt(
                 `Vas a eliminar permanentemente la WAN ${connection.wan_connection_device}.\n\n` +
                 `VLAN: ${connection.vlan ?? '-'}\n` +
@@ -4663,20 +4656,7 @@ function formatDate(value) {
                             </div>
 
 
-<div class="warning-box">
 
-                                    <strong>
-                                        Modo seguro
-                                    </strong>
-
-                                    <p>
-                                        ACS Control está actualmente
-                                        en modo solo lectura.
-                                        Ninguna configuración de esta ONU
-                                        puede modificarse todavía.
-                                    </p>
-
-                                </div>
 
                             </div>
 
@@ -5853,68 +5833,6 @@ function formatDate(value) {
                                             </div>
 
                                             <button
-                                                v-else-if="
-                                                    connection.object_type
-                                                    === 'WANPPPConnection'
-                                                    ||
-                                                    connection.object_type
-                                                    === 'WANIPConnection'
-                                                "
-                                                class="wan-toggle-button"
-                                                :class="{
-                                                    active:
-                                                        connection.enabled
-                                                }"
-                                                :disabled="
-                                                    wanToggleBusy
-                                                    === connection.wan_connection_device
-                                                "
-                                                @click="toggleWan(connection)"
-                                            >
-                                                {{
-                                                    wanToggleBusy
-                                                    === connection.wan_connection_device
-                                                        ? 'Procesando...'
-                                                        : connection.enabled
-                                                            ? 'Desactivar WAN'
-                                                            : 'Activar WAN'
-                                                }}
-                                            </button>
-
-                                            <button
-                                                v-if="
-                                                    !connection.protected
-                                                    && (
-                                                        connection.object_type
-                                                        === 'WANPPPConnection'
-                                                        ||
-                                                        connection.object_type
-                                                        === 'WANIPConnection'
-                                                    )
-                                                "
-                                                class="wan-edit-button"
-                                                :disabled="
-                                                    connection.enabled
-                                                    || wanToggleBusy
-                                                    === connection.wan_connection_device
-                                                "
-                                                @click="
-                                                    openWanEdit(connection)
-                                                "
-                                                :title="
-                                                    connection.enabled
-                                                        ? 'Desactiva la WAN para editar'
-                                                        : 'Editar WAN'
-                                                "
-                                            >
-                                                {{
-                                                    connection.enabled
-                                                        ? 'Desactiva para editar'
-                                                        : 'Editar WAN'
-                                                }}
-                                            </button>
-
-                                            <button
                                                 v-if="
                                                     !connection.protected
                                                     && (
@@ -5926,8 +5844,7 @@ function formatDate(value) {
                                                 "
                                                 class="wan-delete-button"
                                                 :disabled="
-                                                    connection.enabled
-                                                    || wanDeleteBusy
+                                                    wanDeleteBusy
                                                     === connection.wan_connection_device
                                                 "
                                                 @click="
@@ -5938,9 +5855,7 @@ function formatDate(value) {
                                                     wanDeleteBusy
                                                     === connection.wan_connection_device
                                                         ? 'Eliminando...'
-                                                        : connection.enabled
-                                                            ? 'Desactiva para eliminar'
-                                                            : 'Eliminar WAN'
+                                                        : 'Eliminar WAN'
                                                 }}
                                             </button>
 
