@@ -5,7 +5,7 @@ Movido desde app/main.py sin cambios de comportamiento (fase 1 del refactor).
 
 from fastapi import APIRouter, HTTPException, Query
 from app.services.genieacs import genieacs
-from app.services.device_normalizer import normalize_device
+from app.services.device_normalizer import NORMALIZE_PROJECTION, normalize_device
 
 
 router = APIRouter()
@@ -18,7 +18,10 @@ async def devices(
 ):
 
     try:
-        raw_devices = await genieacs.get_devices(limit=limit)
+        raw_devices = await genieacs.get_devices(
+            limit=limit,
+            projection=NORMALIZE_PROJECTION,
+        )
 
     except Exception as exc:
         raise HTTPException(

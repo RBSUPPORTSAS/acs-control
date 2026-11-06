@@ -61,7 +61,7 @@ async def health():
 
     # GenieACS
     try:
-        await genieacs.get_devices(limit=1)
+        await genieacs.get_devices(limit=1, projection=["_id"])
         result["genieacs"] = True
 
     except Exception as exc:
