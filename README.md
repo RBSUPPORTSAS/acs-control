@@ -38,28 +38,28 @@ Guías por plataforma: [docs/INSTALL.md](docs/INSTALL.md)
 - [Proxmox VE (contenedor LXC)](docs/install/proxmox-lxc.md): producción.
 - [macOS](docs/install/macos.md): desarrollo y pruebas locales.
 
-## Quick start
+## Inicio rápido
+
+Requisitos: Python 3.10+, Node.js 20.19+ o 22.12+, PostgreSQL, Redis y acceso de red
+al NBI de GenieACS (puerto 7557). El detalle está en [docs/INSTALL.md](docs/INSTALL.md).
+
+**macOS** (desarrollo y pruebas, instalación automática con Homebrew):
 
 ```bash
-git clone https://github.com/RBSUPPORTSAS/acs-control.git
-cd acs-control
-cp .env.example .env
+git clone https://github.com/RBSUPPORTSAS/acs-control.git ~/acs-control
+cd ~/acs-control
+GENIE_NBI=http://IP_DE_GENIEACS:7557 bash scripts/install-macos.sh
 ```
 
-Backend:
+Al terminar, abra http://127.0.0.1:4173. Más detalles en [docs/install/macos.md](docs/install/macos.md).
 
-```bash
-python3 -m venv .venv
-.venv/bin/pip install -r backend/requirements.txt
-```
+**Linux (Debian / Ubuntu)** para producción, con systemd y Nginx:
+siga [docs/install/linux.md](docs/install/linux.md).
 
-Frontend:
+**Proxmox VE** (contenedor LXC): siga [docs/install/proxmox-lxc.md](docs/install/proxmox-lxc.md).
 
-```bash
-cd frontend
-npm ci
-npm run build
-```
+> ACS Control todavía no tiene autenticación. No lo exponga a Internet ni a redes con
+> usuarios no autorizados.
 
 ## API documentation
 
