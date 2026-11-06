@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from app.core.security import current_username
 from app.models.audit import AuditLog
 
 
@@ -7,8 +8,11 @@ async def add_audit(
     before=None, after=None,
     result="SOLICITADO",
     message=None,
-    username="acs-control"
+    username=None
 ):
+    if username is None:
+        username = current_username.get() or "acs-control"
+
     row = AuditLog(
         username=username,
         action=action,

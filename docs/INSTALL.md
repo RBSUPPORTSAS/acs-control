@@ -43,8 +43,10 @@ Compruébelo siempre con `node --version` antes de compilar el frontend.
 
 ## Seguridad
 
-- ACS Control **todavía no tiene autenticación**. No lo exponga a Internet ni a redes
-  donde haya usuarios no autorizados: cualquier persona que alcance la interfaz puede
-  cambiar WAN, Wi-Fi y CATV de las ONUs.
+- ACS Control exige iniciar sesión, con dos roles: `staff` (administración completa) y
+  `technical` (gestión de ONUs sin acceso a datos del servidor GenieACS). Cada guía
+  explica cómo crear el primer usuario.
+- Aun así, no lo exponga directamente a Internet: publíquelo solo en la red de operación
+  o detrás de una VPN, y use HTTPS si sale de una red de confianza.
 - El backend escucha en `127.0.0.1`; en Linux, Nginx publica el frontend y reenvía `/api`.
 - Nunca publique el archivo `.env` real.

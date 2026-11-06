@@ -4,6 +4,7 @@ from app.core.database import engine
 from app.models.base import Base
 from app.models.audit import AuditLog
 from app.models.device_profile import DeviceProfile
+from app.models.user import User
 
 
 async def main():

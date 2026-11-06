@@ -2556,17 +2556,256 @@ function formatDate(value) {
         }
 
 
-        onMounted(async () => {
+        // ====================================================
+        // SESION Y ROLES
+        // ====================================================
+
+        const currentUser = ref(null)
+        const authChecked = ref(false)
+        const loginForm = ref({ username: '', password: '' })
+        const loginBusy = ref(false)
+        const loginError = ref('')
+
+        const isStaff = computed(() =>
+            currentUser.value?.role === 'staff'
+        )
+
+        function roleLabel(role) {
+            return role === 'staff' ? 'Staff' : 'Técnico'
+        }
+
+        // Cualquier 401 de la API (sesion vencida o revocada) vuelve al login.
+        const nativeFetch = window.fetch.bind(window)
+
+        window.fetch = async (...args) => {
+            const response = await nativeFetch(...args)
+            const url = String(args[0]?.url || args[0] || '')
+
+            if (
+                response.status === 401
+                && url.includes('/api/')
+                && !url.includes('/api/auth/')
+                && currentUser.value
+            ) {
+                stopApp()
+                currentUser.value = null
+                loginError.value = 'Tu sesión expiró. Inicia sesión de nuevo.'
+            }
+
+            return response
+        }
+
+        async function startApp() {
 
             await Promise.all([
                 loadHealth(),
                 loadDevices()
             ])
 
-            refreshTimer = setInterval(
-                refreshAll,
-                30000
+            if (!refreshTimer) {
+                refreshTimer = setInterval(
+                    refreshAll,
+                    30000
+                )
+            }
+        }
+
+        function stopApp() {
+
+            if (refreshTimer) {
+                clearInterval(refreshTimer)
+                refreshTimer = null
+            }
+
+            selectedDevice.value = null
+            configOpen.value = false
+            auditOpen.value = false
+            usersOpen.value = false
+            devices.value = []
+        }
+
+        async function login() {
+
+            loginBusy.value = true
+            loginError.value = ''
+
+            try {
+                const r = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(loginForm.value)
+                })
+
+                const data = await r.json().catch(() => ({}))
+
+                if (!r.ok) {
+                    loginError.value =
+                        data.detail || 'No fue posible iniciar sesión'
+                    return
+                }
+
+                currentUser.value = data.user
+                loginForm.value.password = ''
+                activeView.value = 'inicio'
+                await startApp()
+
+            } catch (e) {
+                loginError.value = 'Sin conexión con el servidor'
+
+            } finally {
+                loginBusy.value = false
+            }
+        }
+
+        async function logout() {
+
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' })
+            } catch (e) {
+                // Aun sin conexion, se cierra la sesion local.
+            }
+
+            stopApp()
+            currentUser.value = null
+            loginError.value = ''
+        }
+
+
+        // ====================================================
+        // USUARIOS (solo staff)
+        // ====================================================
+
+        const usersOpen = ref(false)
+        const users = ref([])
+        const usersLoading = ref(false)
+        const usersError = ref('')
+        const userBusy = ref(false)
+
+        const emptyUserForm = () => ({
+            username: '',
+            full_name: '',
+            role: 'technical',
+            password: ''
+        })
+
+        const userForm = ref(emptyUserForm())
+
+        async function usersRequest(url, options = {}) {
+
+            const r = await fetch(url, {
+                headers: { 'Content-Type': 'application/json' },
+                ...options
+            })
+
+            const data = await r.json().catch(() => ({}))
+
+            if (!r.ok)
+                throw new Error(data.detail || `HTTP ${r.status}`)
+
+            return data
+        }
+
+        async function loadUsers() {
+
+            usersLoading.value = true
+            usersError.value = ''
+
+            try {
+                users.value = (await usersRequest('/api/users')).users
+
+            } catch (e) {
+                usersError.value = e.message
+
+            } finally {
+                usersLoading.value = false
+            }
+        }
+
+        async function openUsers() {
+            usersOpen.value = true
+            userForm.value = emptyUserForm()
+            await loadUsers()
+        }
+
+        function closeUsers() {
+            usersOpen.value = false
+        }
+
+        async function createUser() {
+
+            userBusy.value = true
+            usersError.value = ''
+
+            try {
+                await usersRequest('/api/users', {
+                    method: 'POST',
+                    body: JSON.stringify(userForm.value)
+                })
+
+                userForm.value = emptyUserForm()
+                await loadUsers()
+
+            } catch (e) {
+                usersError.value = e.message
+
+            } finally {
+                userBusy.value = false
+            }
+        }
+
+        async function updateUser(user, changes, confirmText) {
+
+            if (confirmText && !confirm(confirmText))
+                return
+
+            userBusy.value = true
+            usersError.value = ''
+
+            try {
+                await usersRequest(`/api/users/${user.id}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(changes)
+                })
+
+                await loadUsers()
+
+            } catch (e) {
+                usersError.value = e.message
+
+            } finally {
+                userBusy.value = false
+            }
+        }
+
+        async function resetUserPassword(user) {
+
+            const password = prompt(
+                `Nueva contraseña para ${user.username} (mínimo 10 caracteres):`
             )
+
+            if (!password)
+                return
+
+            await updateUser(user, { password })
+        }
+
+
+        onMounted(async () => {
+
+            try {
+                const r = await fetch('/api/auth/me', { cache: 'no-store' })
+
+                if (r.ok)
+                    currentUser.value = (await r.json()).user
+
+            } catch (e) {
+                // Sin servidor: se muestra el login con el error al intentar.
+            }
+
+            authChecked.value = true
+
+            if (currentUser.value)
+                await startApp()
         })
 
 
@@ -2579,6 +2818,26 @@ function formatDate(value) {
 
 
         return {
+            currentUser,
+            authChecked,
+            loginForm,
+            loginBusy,
+            loginError,
+            isStaff,
+            roleLabel,
+            login,
+            logout,
+            usersOpen,
+            users,
+            usersLoading,
+            usersError,
+            userBusy,
+            userForm,
+            openUsers,
+            closeUsers,
+            createUser,
+            updateUser,
+            resetUserPassword,
             devices,
             loading,
             error,
@@ -2717,7 +2976,59 @@ function formatDate(value) {
 
 
     template: `
-        <div class="layout">
+        <div v-if="!authChecked" class="login-page">
+            <div class="login-card login-loading">Cargando…</div>
+        </div>
+
+        <div v-else-if="!currentUser" class="login-page">
+
+            <form class="login-card" @submit.prevent="login">
+
+                <div class="login-brand">
+                    <div class="brand-icon">A</div>
+                    <div>
+                        <strong>ACS Control</strong>
+                        <small>Gestión de ONUs</small>
+                    </div>
+                </div>
+
+                <label>
+                    Usuario
+                    <input
+                        v-model="loginForm.username"
+                        autocomplete="username"
+                        autofocus
+                        required
+                    />
+                </label>
+
+                <label>
+                    Contraseña
+                    <input
+                        v-model="loginForm.password"
+                        type="password"
+                        autocomplete="current-password"
+                        required
+                    />
+                </label>
+
+                <div v-if="loginError" class="login-error">
+                    {{ loginError }}
+                </div>
+
+                <button
+                    type="submit"
+                    class="login-submit"
+                    :disabled="loginBusy"
+                >
+                    {{ loginBusy ? 'Ingresando…' : 'Iniciar sesión' }}
+                </button>
+
+            </form>
+
+        </div>
+
+        <div v-else class="layout">
 
             <!-- ========================================= -->
             <!-- SIDEBAR                                   -->
@@ -2788,6 +3099,7 @@ function formatDate(value) {
 
                     
                     <button
+                        v-if="isStaff"
                         class="nav-item"
                         @click="openAudit"
                     >
@@ -2797,19 +3109,53 @@ function formatDate(value) {
 
 
 
-                    <div class="nav-section">
-                        SISTEMA
+                    <template v-if="isStaff">
+
+                        <div class="nav-section">
+                            SISTEMA
+                        </div>
+
+                        <button
+                            class="nav-item"
+                            @click="openUsers"
+                        >
+                            <span class="nav-icon">👤</span>
+                            Usuarios
+                        </button>
+
+                        <button
+                            class="nav-item"
+                            @click="openConfig"
+                        >
+                            <span class="nav-icon">⚙</span>
+                            Configuración
+                        </button>
+
+                    </template>
+
+                </nav>
+
+
+                <div class="sidebar-user">
+
+                    <div class="sidebar-user-avatar">
+                        {{ (currentUser.full_name || currentUser.username).charAt(0).toUpperCase() }}
+                    </div>
+
+                    <div class="sidebar-user-info">
+                        <strong>{{ currentUser.full_name || currentUser.username }}</strong>
+                        <small>{{ roleLabel(currentUser.role) }}</small>
                     </div>
 
                     <button
-                        class="nav-item"
-                        @click="openConfig"
+                        class="sidebar-logout"
+                        title="Cerrar sesión"
+                        @click="logout"
                     >
-                        <span class="nav-icon">⚙</span>
-                        Configuración
+                        ⎋
                     </button>
 
-                </nav>
+                </div>
 
 
                 <div class="sidebar-status">
@@ -3799,10 +4145,136 @@ function formatDate(value) {
 
             
 
+            <!-- USUARIOS (solo staff) -->
+
+            <div
+                v-if="usersOpen && isStaff"
+                class="config-overlay"
+                @click.self="closeUsers"
+            >
+
+                <div class="config-modal users-modal">
+
+                    <div class="config-modal-head">
+
+                        <div>
+                            <small>👤 SISTEMA</small>
+                            <h2>Usuarios</h2>
+                        </div>
+
+                        <button class="config-close" @click="closeUsers">
+                            ✕
+                        </button>
+
+                    </div>
+
+                    <div v-if="usersError" class="users-error">
+                        {{ usersError }}
+                    </div>
+
+                    <form class="users-form" @submit.prevent="createUser">
+
+                        <strong>Nuevo usuario</strong>
+
+                        <input v-model="userForm.username" placeholder="Usuario" required />
+                        <input v-model="userForm.full_name" placeholder="Nombre (opcional)" />
+
+                        <select v-model="userForm.role">
+                            <option value="technical">Técnico</option>
+                            <option value="staff">Staff</option>
+                        </select>
+
+                        <input
+                            v-model="userForm.password"
+                            type="password"
+                            placeholder="Contraseña (mín. 10)"
+                            autocomplete="new-password"
+                            required
+                        />
+
+                        <button type="submit" :disabled="userBusy">
+                            + Crear
+                        </button>
+
+                    </form>
+
+                    <div v-if="usersLoading" class="users-empty">
+                        Cargando usuarios…
+                    </div>
+
+                    <table v-else class="users-table">
+
+                        <thead>
+                            <tr>
+                                <th>Usuario</th>
+                                <th>Rol</th>
+                                <th>Estado</th>
+                                <th>Último ingreso</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            <tr
+                                v-for="u in users"
+                                :key="u.id"
+                                :class="{ inactive: !u.active }"
+                            >
+                                <td>
+                                    <strong>{{ u.username }}</strong>
+                                    <small v-if="u.full_name">{{ u.full_name }}</small>
+                                </td>
+
+                                <td>
+                                    <select
+                                        :value="u.role"
+                                        :disabled="userBusy"
+                                        @change="updateUser(u, { role: $event.target.value }, 'Cambiar el rol cierra las sesiones abiertas de ' + u.username + '. ¿Continuar?')"
+                                    >
+                                        <option value="technical">Técnico</option>
+                                        <option value="staff">Staff</option>
+                                    </select>
+                                </td>
+
+                                <td>
+                                    <span :class="u.active ? 'text-green' : 'text-red'">
+                                        {{ u.active ? 'Activo' : 'Inactivo' }}
+                                    </span>
+                                </td>
+
+                                <td>
+                                    {{ u.last_login_at ? new Date(u.last_login_at).toLocaleString() : 'Nunca' }}
+                                </td>
+
+                                <td class="users-actions">
+                                    <button
+                                        :disabled="userBusy"
+                                        @click="resetUserPassword(u)"
+                                    >
+                                        Contraseña
+                                    </button>
+
+                                    <button
+                                        :disabled="userBusy || u.id === currentUser.id"
+                                        @click="updateUser(u, { active: !u.active }, (u.active ? 'Desactivar' : 'Activar') + ' a ' + u.username + '?')"
+                                    >
+                                        {{ u.active ? 'Desactivar' : 'Activar' }}
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+
             <!-- CONFIGURACION 17A2 -->
 
             <div
-                v-if="configOpen"
+                v-if="configOpen && isStaff"
                 class="config-overlay"
                 @click.self="closeConfig"
             >
@@ -4087,7 +4559,7 @@ function formatDate(value) {
 
 
 <div
-                v-if="auditOpen"
+                v-if="auditOpen && isStaff"
                 class="audit-overlay"
             >
                 <section class="audit-panel">

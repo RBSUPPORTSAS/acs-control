@@ -3,9 +3,12 @@
 Movido desde app/main.py sin cambios de comportamiento (fase 1 del refactor).
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import Depends, APIRouter, HTTPException, Query
 from app.services.genieacs import genieacs
 from app.services.device_normalizer import NORMALIZE_PROJECTION, normalize_device
+
+from app.api.deps import is_staff, require_user
+from app.models.user import User
 
 
 router = APIRouter()
@@ -76,7 +79,13 @@ async def devices(
 async def device_detail(
     device_id: str,
     raw: bool = False,
+    user: User = Depends(require_user),
 ):
+
+    # El documento crudo incluye la URL del ACS y las credenciales de
+    # connection request: solo staff.
+    if raw and not is_staff(user):
+        raise HTTPException(status_code=403, detail="Requiere rol staff")
 
     try:
         device = await genieacs.get_device(device_id)

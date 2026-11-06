@@ -164,6 +164,30 @@ PYTHONPATH=backend \
   .venv/bin/python -m app.bootstrap_db
 ```
 
+### 7.1 Crear el usuario administrador
+
+ACS Control exige iniciar sesión. Cree el primer usuario con rol `staff`
+(la contraseña se pide de forma interactiva, mínimo 10 caracteres):
+
+```bash
+cd /opt/acs-control
+
+PYTHONPATH=backend \
+  .venv/bin/python -m app.manage_users create --username admin --role staff
+```
+
+Roles disponibles:
+
+| Rol | Acceso |
+|---|---|
+| `staff` | Todo: gestión de ONUs, auditoría, configuración y usuarios |
+| `technical` | Gestión de ONUs (WAN, Wi-Fi, CATV, etiquetas). No ve datos del servidor GenieACS, ni la auditoría, ni la configuración |
+
+Después, los demás usuarios se crean desde la interfaz (**Sistema → Usuarios**).
+Para recuperar el acceso use `reset-password` en lugar de `create`.
+
+Si sirve ACS Control por HTTPS, agregue `SESSION_COOKIE_SECURE=true` en `.env`.
+
 ## 8. Probar backend manualmente
 
 ```bash

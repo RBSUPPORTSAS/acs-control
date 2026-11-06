@@ -3,13 +3,16 @@
 Movido desde app/main.py sin cambios de comportamiento (fase 1 del refactor).
 """
 
-from fastapi import APIRouter
+from fastapi import Depends, APIRouter
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 import redis.asyncio as redis
 from app.core.config import settings
 from app.core.database import engine
 from app.services.genieacs import genieacs
+
+from app.api.deps import get_optional_user, is_staff, require_staff
+from app.models.user import User
 
 
 router = APIRouter()
@@ -25,7 +28,7 @@ async def root():
 
 
 @router.get("/api/health")
-async def health():
+async def health(user: User | None = Depends(get_optional_user)):
 
     result = {
         "api": True,
@@ -78,6 +81,15 @@ async def health():
 
     status_code = 200 if result["healthy"] else 503
 
+    # Los mensajes de error pueden incluir direcciones internas:
+    # solo se muestran a staff.
+    if not is_staff(user):
+        result = {
+            key: value
+            for key, value in result.items()
+            if not key.endswith("_error")
+        }
+
     return JSONResponse(
         status_code=status_code,
         content=result,
@@ -86,7 +98,7 @@ async def health():
 
 # ACS_SYSTEM_CONFIG_17A2
 @router.get("/api/system/config")
-async def system_configuration():
+async def system_configuration(_: User = Depends(require_staff)):
 
     # No exponemos APP_SECRET_KEY,
     # DATABASE_URL ni ninguna credencial.
