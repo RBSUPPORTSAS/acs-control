@@ -2824,3 +2824,348 @@ tbody tr:hover {
     margin-left: auto;
     margin-right: auto;
 }
+
+
+/* ==========================================================
+   LOGIN
+   ========================================================== */
+
+.login-page {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: #f5f7fb;
+}
+
+.login-card {
+    width: min(380px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    padding: 30px 28px;
+
+    background: white;
+    border: 1px solid #eaecf0;
+    border-radius: 14px;
+    box-shadow: 0 12px 32px rgba(16, 24, 40, .08);
+}
+
+.login-loading {
+    align-items: center;
+    color: #667085;
+}
+
+.login-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+
+.login-brand strong {
+    display: block;
+    font-size: 18px;
+    color: #101828;
+}
+
+.login-brand small {
+    color: #667085;
+}
+
+.login-card label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #344054;
+}
+
+.login-card input {
+    padding: 10px 12px;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    font: inherit;
+}
+
+.login-card input:focus {
+    outline: 2px solid #c7d2fe;
+    border-color: #6172f3;
+}
+
+.login-error {
+    padding: 9px 12px;
+    border-radius: 8px;
+    background: #fef3f2;
+    color: #b42318;
+    font-size: 13px;
+}
+
+.login-submit {
+    padding: 11px;
+    border: 0;
+    border-radius: 8px;
+    background: #444ce7;
+    color: white;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.login-submit:disabled {
+    opacity: .6;
+    cursor: wait;
+}
+
+
+/* ==========================================================
+   USUARIO EN LA BARRA LATERAL (fondo oscuro)
+   ========================================================== */
+
+.sidebar-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding: 10px;
+    border: 1px solid #344054;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .04);
+}
+
+.sidebar-user-avatar {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #4f7cff;
+    color: white;
+    font-weight: 700;
+}
+
+.sidebar-user-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.sidebar-user-info strong {
+    display: block;
+    font-size: 13px;
+    color: white;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sidebar-user-info small {
+    color: #98a2b3;
+    font-size: 12px;
+}
+
+.sidebar-logout {
+    border: 0;
+    background: transparent;
+    color: #98a2b3;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 6px;
+}
+
+.sidebar-logout:hover {
+    background: rgba(240, 68, 56, .15);
+    color: #fda29b;
+}
+
+
+/* ==========================================================
+   GESTION DE USUARIOS
+   ========================================================== */
+
+.users-modal {
+    width: min(900px, 100%);
+}
+
+.users-error {
+    margin: 0 0 12px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    background: #fef3f2;
+    color: #b42318;
+    font-size: 13px;
+}
+
+.users-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr 130px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 16px;
+    padding: 14px;
+    border: 1px solid #eaecf0;
+    border-radius: 10px;
+    background: #f9fafb;
+}
+
+.users-form strong {
+    grid-column: 1 / -1;
+    font-size: 13px;
+    color: #344054;
+}
+
+.users-form input,
+.users-form select,
+.users-table select {
+    padding: 8px 10px;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    font: inherit;
+    font-size: 13px;
+    background: white;
+}
+
+.users-form button,
+.users-actions button {
+    padding: 8px 12px;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    background: white;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.users-form button {
+    background: #444ce7;
+    border-color: #444ce7;
+    color: white;
+    font-weight: 600;
+}
+
+.users-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.users-table th {
+    text-align: left;
+    padding: 8px;
+    color: #667085;
+    font-weight: 600;
+    border-bottom: 1px solid #eaecf0;
+}
+
+.users-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #f2f4f7;
+    vertical-align: middle;
+}
+
+.users-table td small {
+    display: block;
+    color: #667085;
+}
+
+.users-table tr.inactive td {
+    opacity: .55;
+}
+
+.users-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.users-empty {
+    padding: 20px;
+    color: #667085;
+    text-align: center;
+}
+
+@media (max-width: 760px) {
+    .users-form {
+        grid-template-columns: 1fr;
+    }
+
+    .users-table thead {
+        display: none;
+    }
+
+    .users-table tr {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        padding: 8px 0;
+        border-bottom: 1px solid #eaecf0;
+    }
+
+    .users-table td {
+        border: 0;
+        padding: 4px 8px;
+    }
+}
+
+
+/* ==========================================================
+   AUDITORIA: filtros y detalle
+   ========================================================== */
+
+.audit-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.audit-filter {
+    padding: 5px 12px;
+    border: 1px solid #d0d5dd;
+    border-radius: 99px;
+    background: white;
+    font: inherit;
+    font-size: 13px;
+    color: #344054;
+    cursor: pointer;
+}
+
+.audit-filter.active {
+    border-color: #444ce7;
+    background: #eef4ff;
+    color: #3538cd;
+    font-weight: 600;
+}
+
+.audit-message {
+    display: block;
+    color: #667085;
+    font-weight: 400;
+}
+
+.audit-type {
+    display: block;
+    color: #667085;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+
+/* Staff: boton eliminar */
+
+.users-actions .users-delete {
+    border-color: #fda29b;
+    color: #b42318;
+}
+
+.users-actions .users-delete:hover:not(:disabled) {
+    background: #fef3f2;
+}
+
+.users-actions button:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}

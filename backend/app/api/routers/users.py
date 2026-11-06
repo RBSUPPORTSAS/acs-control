@@ -1,0 +1,209 @@
+"""Gestion de usuarios (solo admin)."""
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import require_admin
+from app.core.database import get_db
+from app.core.security import delete_user_sessions, hash_password, validate_password
+from app.models.user import ROLES, User
+from app.services.audit_service import log_event
+
+
+router = APIRouter()
+
+
+class UserCreate(BaseModel):
+    username: str
+    full_name: str | None = None
+    role: str = "technical"
+    password: str
+
+
+class UserUpdate(BaseModel):
+    full_name: str | None = None
+    role: str | None = None
+    active: bool | None = None
+    password: str | None = None
+
+
+def user_row(user: User) -> dict:
+    return {
+        "id": user.id,
+        "username": user.username,
+        "full_name": user.full_name,
+        "role": user.role,
+        "active": user.active,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+    }
+
+
+async def active_admin_count(db: AsyncSession) -> int:
+    return (
+        await db.execute(
+            select(func.count()).select_from(User).where(User.role == "admin", User.active.is_(True))
+        )
+    ).scalar_one()
+
+
+@router.get("/api/users")
+async def list_users(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    rows = (await db.execute(select(User).order_by(User.username))).scalars().all()
+    return {"users": [user_row(u) for u in rows]}
+
+
+@router.post("/api/users", status_code=201)
+async def create_user(
+    payload: UserCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    username = payload.username.strip()
+
+    if not username or len(username) > 64 or " " in username:
+        raise HTTPException(400, "Usuario no válido (sin espacios, máximo 64 caracteres)")
+
+    if payload.role not in ROLES:
+        raise HTTPException(400, f"Rol no válido. Opciones: {', '.join(ROLES)}")
+
+    error = validate_password(payload.password)
+    if error:
+        raise HTTPException(400, error)
+
+    exists = (
+        await db.execute(select(User).where(func.lower(User.username) == username.lower()))
+    ).scalar_one_or_none()
+
+    if exists:
+        raise HTTPException(409, "Ya existe un usuario con ese nombre")
+
+    user = User(
+        username=username,
+        full_name=(payload.full_name or "").strip() or None,
+        role=payload.role,
+        password_hash=hash_password(payload.password),
+        active=True,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    await log_event(
+        db, "USUARIO_CREAR", "USUARIO", user.username, request,
+        after={"rol": user.role, "nombre": user.full_name},
+    )
+
+    return {"user": user_row(user)}
+
+
+@router.patch("/api/users/{user_id}")
+async def update_user(
+    user_id: int,
+    payload: UserUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    me: User = Depends(require_admin),
+):
+    user = await db.get(User, user_id)
+
+    if not user:
+        raise HTTPException(404, "Usuario no encontrado")
+
+    before = {"rol": user.role, "activo": user.active, "nombre": user.full_name}
+
+    loses_admin = (
+        user.role == "admin" and user.active
+        and (payload.role not in (None, "admin") or payload.active is False)
+    )
+
+    if loses_admin and await active_admin_count(db) <= 1:
+        raise HTTPException(409, "Debe quedar al menos un usuario admin activo")
+
+    if payload.role is not None:
+        if payload.role not in ROLES:
+            raise HTTPException(400, f"Rol no válido. Opciones: {', '.join(ROLES)}")
+        user.role = payload.role
+
+    if payload.full_name is not None:
+        user.full_name = payload.full_name.strip() or None
+
+    if payload.active is not None:
+        user.active = payload.active
+
+    if payload.password:
+        error = validate_password(payload.password)
+        if error:
+            raise HTTPException(400, error)
+        user.password_hash = hash_password(payload.password)
+
+    await db.commit()
+    await db.refresh(user)
+
+    # Nunca se registra la contrasena: solo que fue cambiada.
+    after = {"rol": user.role, "activo": user.active, "nombre": user.full_name}
+    changes = {k: v for k, v in after.items() if before[k] != v}
+
+    if payload.password:
+        changes["contrasena_cambiada"] = True
+
+    if changes:
+        action = (
+            "USUARIO_DESACTIVAR" if changes.get("activo") is False
+            else "USUARIO_ACTIVAR" if changes.get("activo") is True
+            else "USUARIO_CAMBIAR_ROL" if "rol" in changes
+            else "USUARIO_CAMBIAR_CONTRASENA" if list(changes) == ["contrasena_cambiada"]
+            else "USUARIO_EDITAR"
+        )
+        await log_event(
+            db, action, "USUARIO", user.username, request,
+            before={k: before[k] for k in changes if k in before},
+            after=changes,
+        )
+
+    # Cambios de rol, estado o contrasena cierran las sesiones abiertas del usuario
+    # (salvo la propia sesion de quien cambia su nombre).
+    if payload.role is not None or payload.active is not None or payload.password:
+        if user.id != me.id or payload.active is False or payload.role not in (None, "admin"):
+            await delete_user_sessions(user.id)
+
+    return {"user": user_row(user)}
+
+
+@router.delete("/api/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    me: User = Depends(require_admin),
+):
+    user = await db.get(User, user_id)
+
+    if not user:
+        raise HTTPException(404, "Usuario no encontrado")
+
+    if user.id == me.id:
+        raise HTTPException(409, "No puede eliminar su propio usuario")
+
+    if user.role == "admin" and user.active and await active_admin_count(db) <= 1:
+        raise HTTPException(409, "Debe quedar al menos un usuario admin activo")
+
+    removed = user_row(user)
+
+    await delete_user_sessions(user.id)
+    await db.delete(user)
+    await db.commit()
+
+    # El historial de auditoria se conserva: guarda el nombre, no una referencia.
+    await log_event(
+        db, "USUARIO_ELIMINAR", "USUARIO", removed["username"], request,
+        before={"rol": removed["role"], "activo": removed["active"], "nombre": removed["full_name"]},
+    )
+
+    return {"ok": True, "deleted": removed["username"]}

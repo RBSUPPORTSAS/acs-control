@@ -114,6 +114,12 @@ paso "7/9 Backend (Python $PY_VER)"
 "$APP/.venv/bin/pip" install -q -r "$APP/backend/requirements.txt"
 (cd "$APP" && PYTHONPATH=backend .venv/bin/python -m app.bootstrap_db)
 
+if [ -z "$(cd "$APP" && PYTHONPATH=backend .venv/bin/python -m app.manage_users list)" ]; then
+  echo
+  echo "Cree el primer usuario administrador (rol admin):"
+  (cd "$APP" && PYTHONPATH=backend .venv/bin/python -m app.manage_users create --username admin --role admin)
+fi
+
 # 8. Frontend --------------------------------------------------------
 paso "8/9 Frontend"
 (cd "$APP/frontend" && npm ci --no-audit --no-fund && npm run build)
