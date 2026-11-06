@@ -75,13 +75,16 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
     if services in (None, ""):
         services = field(obj, "X_CATV_ServiceList")
 
-    # En X_CATV la VLAN/802.1p viven en el WCD, no en la conexión.
+    # Segun el fabricante, la VLAN/802.1p viven en la conexion
+    # (X_CT-COM_VLANIDMark, VSOL) o en el WCD: X_CATV_WANGponLinkConfig
+    # o X_CT-COM_WANGponLinkConfig (p. ej. HG102DWT).
     link = {}
 
     if isinstance(wcd_obj, dict):
-        link = wcd_obj.get(
-            "X_CATV_WANGponLinkConfig",
-            {}
+        link = (
+            wcd_obj.get("X_CATV_WANGponLinkConfig")
+            or wcd_obj.get("X_CT-COM_WANGponLinkConfig")
+            or {}
         )
 
     vlan = field(obj, "X_CT-COM_VLANIDMark")

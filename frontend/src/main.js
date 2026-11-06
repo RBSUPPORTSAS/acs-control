@@ -652,6 +652,7 @@ const manufacturerOptions = computed(() => {
             CATV_DESACTIVAR: 'CATV desactivado',
             WAN_CREAR_PPPOE: 'WAN PPPoE creada',
             WAN_CREAR_DHCP: 'WAN DHCP creada',
+            WAN_CREAR_ESTATICA: 'WAN estática creada',
             WAN_CREAR_VSOL_PPPOE: 'WAN PPPoE creada (VSOL)',
             WAN_CREAR_VSOL_DHCP: 'WAN DHCP creada (VSOL)',
             WAN_CREAR_VSOL_STATIC: 'WAN estática creada (VSOL)',
@@ -1592,14 +1593,10 @@ function catvState(value) {
 
                 else if (type === 'static') {
 
-                    if (!isVsol) {
-                        throw new Error(
-                            'IP fija por ahora está validada únicamente para VSOL.'
-                        )
-                    }
-
-                    endpoint =
-                        `/api/devices/${id}/wan/vsol/create-ip`
+                    // Fuera de VSOL, el backend valida si el modelo admite IP fija
+                    endpoint = isVsol
+                        ? `/api/devices/${id}/wan/vsol/create-ip`
+                        : `/api/devices/${id}/wan/create-ip`
 
                     payload.addressing_type = 'STATIC'
 
