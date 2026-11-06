@@ -105,3 +105,6 @@ Thumbs.db
 config/.env
 backend/.env
 frontend/.env
+
+# ACS Control local (macOS)
+.run/
