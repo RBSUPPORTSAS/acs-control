@@ -3,8 +3,9 @@
 Instalación local para **desarrollo y pruebas** en macOS (Apple Silicon o Intel).
 Para producción use [Linux](linux.md) o [Proxmox CT](proxmox-lxc.md).
 
-> Estado: **por validar**. Si la sigue, reporte el resultado para actualizar
-> [la tabla de plataformas](../INSTALL.md).
+> Estado: **validado en Apple Silicon** (instalación automática completa, conectada a un
+> GenieACS real). En Mac con Intel está por validar: si la sigue, reporte el resultado
+> para actualizar [la tabla de plataformas](../INSTALL.md).
 
 ## Requisitos
 

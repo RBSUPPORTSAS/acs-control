@@ -12,7 +12,7 @@ Necesita PostgreSQL, Redis y acceso de red al **NBI de GenieACS** (puerto 7557 p
 | Ubuntu 24.04 LTS | Producción | [Linux (Debian / Ubuntu)](install/linux.md) | Por validar |
 | Ubuntu 22.04 LTS | Producción | [Linux (Debian / Ubuntu)](install/linux.md) | Backend y frontend validados contra GenieACS; systemd/Nginx por validar |
 | Proxmox VE (contenedor LXC) | Producción | [Proxmox CT](install/proxmox-lxc.md) | Por validar |
-| macOS (Apple Silicon / Intel) | Desarrollo y pruebas locales | [macOS](install/macos.md) | Por validar |
+| macOS (Apple Silicon / Intel) | Desarrollo y pruebas locales | [macOS](install/macos.md) | Validado en Apple Silicon; Intel por validar |
 
 "Validado" significa que la guía se siguió completa en esa plataforma y ACS Control
 funcionó contra un GenieACS real. Si la sigue en una plataforma "por validar", reporte el
