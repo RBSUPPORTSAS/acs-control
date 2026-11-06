@@ -48,3 +48,37 @@ def detect_wan_driver(device):
 
     # 3. Constructor antiguo
     return "generic"
+
+
+def huawei_wan(device):
+    """True si las WAN usan el modelo Huawei (X_HW_VLAN / X_HW_SERVICELIST).
+
+    En Huawei la VLAN va en X_HW_VLAN de la conexion. Los creadores y
+    editores de VLAN de ACS-Control escriben X_CT-COM_*, que Huawei no
+    tiene: GenieACS los omitiria sin error y la WAN quedaria sin VLAN.
+    Mientras no se valide en laboratorio, esas operaciones se bloquean.
+    """
+
+    try:
+        wcds = device["InternetGatewayDevice"]["WANDevice"]["1"]["WANConnectionDevice"]
+    except Exception:
+        return False
+
+    if not isinstance(wcds, dict):
+        return False
+
+    for index, wcd in wcds.items():
+        if not str(index).isdigit() or not isinstance(wcd, dict):
+            continue
+        for kind in ("WANIPConnection", "WANPPPConnection"):
+            for inst, conn in (wcd.get(kind) or {}).items():
+                if str(inst).isdigit() and isinstance(conn, dict) and (
+                    "X_HW_VLAN" in conn or "X_HW_SERVICELIST" in conn
+                ):
+                    return True
+
+    return False
+
+
+HUAWEI_CREATE_MSG = "Crear WAN aún no está validado en ONUs Huawei"
+HUAWEI_VLAN_MSG = "Cambiar VLAN o prioridad aún no está validado en ONUs Huawei"

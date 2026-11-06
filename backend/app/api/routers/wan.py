@@ -145,6 +145,11 @@ async def create_pppoe_wan(
             detail="ONU no encontrada"
         )
 
+    from app.services.wan_driver import HUAWEI_CREATE_MSG, huawei_wan
+
+    if huawei_wan(device):
+        raise HTTPException(400, HUAWEI_CREATE_MSG)
+
     vlan = int(payload.get("vlan", 0))
 
     if vlan < 1 or vlan > 4094:
@@ -614,6 +619,14 @@ async def edit_pppoe_wan(
             "WAN protegida: contiene TR069"
         )
 
+    from app.services.wan_driver import HUAWEI_VLAN_MSG, huawei_wan
+
+    if huawei_wan(device) and (
+        ("vlan" in payload and str(payload["vlan"]) != str(wan.get("vlan")))
+        or ("priority" in payload and str(payload["priority"]) != str(wan.get("priority_8021p")))
+    ):
+        raise HTTPException(400, HUAWEI_VLAN_MSG)
+
     base = (
         "InternetGatewayDevice."
         "WANDevice.1."
@@ -882,6 +895,11 @@ async def create_dhcp_wan(
     if not device:
         raise HTTPException(404, "ONU no encontrada")
 
+    from app.services.wan_driver import HUAWEI_CREATE_MSG, huawei_wan
+
+    if huawei_wan(device):
+        raise HTTPException(400, HUAWEI_CREATE_MSG)
+
     vlan = int(payload.get("vlan", 0))
     priority = int(payload.get("priority", 0))
     mtu = int(payload.get("mtu", 1500))
@@ -1080,6 +1098,11 @@ async def create_vsol_ip_wan(
     if not device:
         raise HTTPException(404, "ONU no encontrada")
 
+    from app.services.wan_driver import HUAWEI_CREATE_MSG, huawei_wan
+
+    if huawei_wan(device):
+        raise HTTPException(400, HUAWEI_CREATE_MSG)
+
     audit_payload = {
         "type": "DHCP" if mode == "DHCP" else "Static",
         "vlan": payload.get("vlan"),
@@ -1243,6 +1266,11 @@ async def create_vsol_pppoe_wan(
 
     if not device:
         raise HTTPException(404, "ONU no encontrada")
+
+    from app.services.wan_driver import HUAWEI_CREATE_MSG, huawei_wan
+
+    if huawei_wan(device):
+        raise HTTPException(400, HUAWEI_CREATE_MSG)
 
     audit_data = {
         "type": "PPPoE",
@@ -1682,6 +1710,14 @@ async def edit_pppoe_wan_wcd(
             "WAN protegida: contiene TR069"
         )
 
+    from app.services.wan_driver import HUAWEI_VLAN_MSG, huawei_wan
+
+    if huawei_wan(device) and (
+        ("vlan" in payload and str(payload["vlan"]) != str(wan.get("vlan")))
+        or ("priority" in payload and str(payload["priority"]) != str(wan.get("priority_8021p")))
+    ):
+        raise HTTPException(400, HUAWEI_VLAN_MSG)
+
     base = (
         "InternetGatewayDevice."
         "WANDevice.1."
@@ -2070,6 +2106,14 @@ async def edit_ip_wan_wcd(
 
     if wan.get("protected"):
         raise HTTPException(403, "WAN protegida: contiene TR069")
+
+    from app.services.wan_driver import HUAWEI_VLAN_MSG, huawei_wan
+
+    if huawei_wan(device) and (
+        ("vlan" in payload and str(payload["vlan"]) != str(wan.get("vlan")))
+        or ("priority" in payload and str(payload["priority"]) != str(wan.get("priority_8021p")))
+    ):
+        raise HTTPException(400, HUAWEI_VLAN_MSG)
 
     mode = str(
         wan.get("addressing_type") or "DHCP"

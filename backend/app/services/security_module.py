@@ -110,15 +110,53 @@ def get_acl(device):
         return None
 
 
-def firewall_grade(device):
+# Huawei (HG8145V5, HG8546M...) guarda el nivel como texto en
+# X_HW_Security.X_HW_FirewallLevel. VSOL usa un numero en
+# AclServices.FireWallGrade. Internamente se usa el mismo codigo.
+HUAWEI_LEVEL_PATH = "InternetGatewayDevice.X_HW_Security.X_HW_FirewallLevel"
+
+HUAWEI_LEVELS = {
+    "low": 0,
+    "high": 1,
+    "middle": 2,
+    "custom": 3,
+}
+
+HUAWEI_WRITE = {
+    0: "Low",
+    1: "High",
+}
+
+
+def firewall_source(device):
+    """("grade", nodo) para VSOL, ("huawei", nodo) para Huawei o (None, None)."""
+
     acl = get_acl(device)
 
-    if not acl:
-        return None
+    if acl and isinstance(acl.get("FireWallGrade"), dict):
+        return "grade", acl.get("FireWallGrade")
 
-    return to_int(
-        acl.get("FireWallGrade")
-    )
+    try:
+        node = device["InternetGatewayDevice"]["X_HW_Security"]["X_HW_FirewallLevel"]
+    except Exception:
+        node = None
+
+    if isinstance(node, dict):
+        return "huawei", node
+
+    return None, None
+
+
+def firewall_grade(device):
+    kind, node = firewall_source(device)
+
+    if kind == "grade":
+        return to_int(node)
+
+    if kind == "huawei":
+        return HUAWEI_LEVELS.get(str(unwrap(node) or "").strip().lower())
+
+    return None
 
 
 def firewall_label(grade):
@@ -128,7 +166,31 @@ def firewall_label(grade):
     if grade == 1:
         return "Alto"
 
+    if grade == 2:
+        return "Medio"
+
+    if grade == 3:
+        return "Personalizado"
+
     return f"Desconocido ({grade})"
+
+
+def firewall_write(device, grade):
+    """Parametro, valor y tipo para fijar el nivel (0 Bajo, 1 Alto)."""
+
+    kind, node = firewall_source(device)
+
+    if kind == "grade":
+        return (
+            "InternetGatewayDevice.X_HW_Security.AclServices.FireWallGrade",
+            grade,
+            "xsd:unsignedInt",
+        )
+
+    if kind == "huawei":
+        return HUAWEI_LEVEL_PATH, HUAWEI_WRITE[grade], "xsd:string"
+
+    return None
 
 
 def security_state(device):
@@ -143,8 +205,8 @@ def security_state(device):
             "tr069_protected": True,
         }
 
-    grade_obj = acl.get("FireWallGrade")
-    grade = to_int(grade_obj)
+    _, grade_obj = firewall_source(device)
+    grade = firewall_grade(device)
 
     services = []
 

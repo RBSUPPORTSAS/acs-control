@@ -21,6 +21,35 @@ def children(obj):
     ]
 
 
+def huawei_lan_binding(obj):
+    """Huawei: X_HW_LANBIND.Lan1Enable..SSID4Enable (1 = asociada).
+
+    Se convierte al mismo formato que X_CT-COM_LanInterface (rutas
+    separadas por comas) para que la interfaz las muestre igual.
+    """
+
+    bind = obj.get("X_HW_LANBIND") if isinstance(obj, dict) else None
+
+    if not isinstance(bind, dict):
+        return None
+
+    paths = []
+
+    for key in sorted(bind):
+        if key.startswith("_") or str(unwrap(bind[key])) not in ("1", "True", "true"):
+            continue
+
+        if key.startswith("Lan") and key.endswith("Enable"):
+            n = key[3:-6]
+            paths.append(f"InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.{n}")
+
+        elif key.startswith("SSID") and key.endswith("Enable"):
+            n = key[4:-6]
+            paths.append(f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{n}")
+
+    return ",".join(paths) or None
+
+
 def read_connection(obj, wcd, instance, kind, wcd_obj=None):
 
     conn_type = field(obj, "ConnectionType")
@@ -69,11 +98,15 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
         else conn_type
     )
 
-    # ServiceList puede usar CT-COM o X_CATV
+    # ServiceList segun fabricante: CT-COM (VSOL, HG102DWT), X_CATV o
+    # X_HW (Huawei). Si no se lee, la WAN TR-069 no quedaria protegida.
     services = field(obj, "X_CT-COM_ServiceList")
 
     if services in (None, ""):
         services = field(obj, "X_CATV_ServiceList")
+
+    if services in (None, ""):
+        services = field(obj, "X_HW_SERVICELIST")
 
     # Segun el fabricante, la VLAN/802.1p viven en la conexion
     # (X_CT-COM_VLANIDMark, VSOL) o en el WCD: X_CATV_WANGponLinkConfig
@@ -92,10 +125,16 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
     if vlan is None:
         vlan = field(link, "VLANIDMark")
 
+    if vlan is None:
+        vlan = field(obj, "X_HW_VLAN")  # Huawei
+
     priority = field(obj, "X_CT-COM_802-1pMark")
 
     if priority is None:
         priority = field(link, "802-1pMark")
+
+    if priority is None:
+        priority = field(obj, "X_HW_PRI")  # Huawei
 
     lan_binding = field(
         obj,
@@ -108,6 +147,9 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
             "X_CATV_LanInterface"
         )
 
+    if not lan_binding:
+        lan_binding = huawei_lan_binding(obj)
+
     if isinstance(services, str):
         services = [
             x.strip()
@@ -116,6 +158,11 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
         ]
     else:
         services = []
+
+    tr069 = (
+        "TR069" in services
+        or "TR069" in str(field(obj, "Name") or "").upper().replace("-", "")
+    )
 
     return {
         "wan_connection_device": wcd,
@@ -153,10 +200,12 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
 
         "services": services,
 
-        "protected": "TR069" in services,
+        # Red de seguridad: tambien se protege si el nombre dice TR069,
+        # por si un fabricante reporta el servicio en otro parametro.
+        "protected": tr069,
         "protection_reason": (
             "Esta WAN transporta TR-069 y modificarla puede perder la gestión remota."
-            if "TR069" in services
+            if tr069
             else None
         ),
 
