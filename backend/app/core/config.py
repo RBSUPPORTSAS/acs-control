@@ -65,6 +65,16 @@ class Settings(BaseSettings):
     # True cuando ACS Control se sirve por HTTPS (la cookie solo viaja cifrada).
     session_cookie_secure: bool = False
 
+    # Lectura de datos de las ONUs (refreshObject por NBI)
+    # Al abrir una ONU se vuelven a leer sus datos si tienen mas de estos minutos.
+    refresh_max_age_minutes: int = 15
+    # Cada cuantos minutos se revisan las ONUs nuevas (0 desactiva).
+    refresh_sync_minutes: int = 5
+    # Que se considera "nueva": registrada en las ultimas N horas.
+    refresh_sync_new_hours: int = 48
+    # Cuantas ONUs como maximo se encolan por ronda.
+    refresh_sync_batch: int = 20
+
     # Logging
     log_level: str = "INFO"
 

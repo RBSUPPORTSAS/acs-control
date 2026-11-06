@@ -3,7 +3,8 @@ import {
     ref,
     computed,
     onMounted,
-    onUnmounted
+    onUnmounted,
+    watch
 } from 'vue/dist/vue.esm-bundler.js'
 
 import './style.css'
@@ -35,6 +36,15 @@ createApp({
 
         const selectedDevice = ref(null)
         const detailLoading = ref(false)
+
+        // Lectura de datos de la ONU bajo demanda (refreshObject, solo lectura)
+        const dataStatus = ref(null)
+        // '' | 'reading' | 'updating' | 'waiting' | 'done' | 'error'
+        const refreshState = ref('')
+        const refreshMessage = ref('')
+        // Llegaron datos nuevos pero la pestaña no se recargó (formulario en uso)
+        const refreshNewData = ref(false)
+        let refreshToken = 0
         const activeTab = ref('resumen')
 
 // ACS_TAGS_WRITE_UI_08D
@@ -875,6 +885,8 @@ async function loadHealth() {
 
         async function openDevice(device) {
 
+            stopRefresh()
+            dataStatus.value = null
             detailLoading.value = true
             activeTab.value = 'resumen'
 
@@ -899,6 +911,8 @@ async function loadHealth() {
 
                     selectedDevice.value =
                         data.device || device
+
+                    dataStatus.value = data.data_status || null
                 }
 
             } catch (e) {
@@ -906,7 +920,196 @@ async function loadHealth() {
             }
 
             detailLoading.value = false
+
+            // Si faltan datos o están viejos, se piden a la ONU sin bloquear la vista
+            const ds = dataStatus.value
+            if (ds && (!ds.complete || ds.stale))
+                startRefresh()
         }
+
+
+        const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+        const BRANCH_LABELS = {
+            DeviceInfo: 'información del equipo',
+            WANDevice: 'WAN',
+            LANDevice: 'red local, Wi-Fi y hosts',
+            WLANConfiguration: 'Wi-Fi',
+            Hosts: 'hosts',
+            X_HW_Security: 'seguridad',
+            X_CATV_RFDevice: 'CATV',
+            WiFi: 'Wi-Fi',
+            IP: 'IP',
+            PPP: 'PPPoE'
+        }
+
+        function branchLabel(path) {
+            const parts = String(path || '').split('.')
+            for (let i = parts.length - 1; i >= 0; i--) {
+                if (BRANCH_LABELS[parts[i]])
+                    return BRANCH_LABELS[parts[i]]
+            }
+            return parts[parts.length - 1] || path
+        }
+
+        function stopRefresh() {
+            refreshToken++
+            refreshState.value = ''
+            refreshMessage.value = ''
+            refreshNewData.value = false
+        }
+
+        async function refreshCall(id, method, force = false) {
+            const r = await fetch(
+                `/api/devices/${id}/refresh${force ? '?force=true' : ''}`,
+                { method, cache: 'no-store' }
+            )
+            const data = await r.json().catch(() => ({}))
+            if (!r.ok)
+                throw new Error(data.detail || `HTTP ${r.status}`)
+            return data
+        }
+
+        const TAB_LOADERS = () => ({
+            internet: openWan,
+            wifi: openWifi,
+            catv: openCatv,
+            seguridad: openSecurity
+        })
+
+        async function reloadActiveTab() {
+            refreshNewData.value = false
+            const loader = TAB_LOADERS()[activeTab.value]
+            if (loader)
+                await loader()
+            if (refreshState.value === 'done')
+                refreshState.value = ''
+        }
+
+        async function applyRefreshedData(deviceId, wasIncomplete) {
+            const id = encodeURIComponent(deviceId)
+            const r = await fetch(`/api/devices/${id}`, { cache: 'no-store' })
+
+            if (!r.ok || !selectedDevice.value || selectedDevice.value.id !== deviceId)
+                return
+
+            const data = await r.json()
+            selectedDevice.value = data.device || selectedDevice.value
+            dataStatus.value = data.data_status || null
+
+            // La pestaña abierta se recarga sola si antes no tenía datos y no hay
+            // un formulario en uso; si no, se ofrece recargarla para no borrar
+            // lo que el técnico esté escribiendo.
+            if (!TAB_LOADERS()[activeTab.value])
+                return
+
+            if (wasIncomplete && !wanFormOpen.value)
+                await TAB_LOADERS()[activeTab.value]()
+            else
+                refreshNewData.value = true
+        }
+
+        async function startRefresh(force = false) {
+
+            if (!selectedDevice.value)
+                return
+
+            const token = ++refreshToken
+            const deviceId = selectedDevice.value.id
+            const id = encodeURIComponent(deviceId)
+            const wasIncomplete = !!dataStatus.value && !dataStatus.value.complete
+            const alive = () =>
+                token === refreshToken
+                && selectedDevice.value
+                && selectedDevice.value.id === deviceId
+
+            refreshState.value = wasIncomplete ? 'reading' : 'updating'
+            refreshMessage.value = ''
+            refreshNewData.value = false
+
+            let failed = []
+            let changed = false
+
+            try {
+                // Varias rondas: la primera lectura de una ONU nueva descubre
+                // ramas (p. ej. seguridad) que se piden en la siguiente.
+                for (let round = 0; round < 3; round++) {
+
+                    const res = await refreshCall(id, 'POST', force && round === 0)
+                    if (!alive()) return
+
+                    if (res.status === 'fresh')
+                        break
+
+                    changed = true
+
+                    if (res.status !== 'done') {
+                        const started = Date.now()
+
+                        while (true) {
+                            const elapsed = Date.now() - started
+                            await sleep(elapsed < 30000 ? 2000 : 15000)
+                            if (!alive()) return
+
+                            const st = await refreshCall(id, 'GET')
+                            if (!alive()) return
+
+                            failed = failed.concat(st.failed || [])
+
+                            if (!st.pending)
+                                break
+
+                            if (Date.now() - started >= 30000)
+                                refreshState.value = 'waiting'
+
+                            if (Date.now() - started >= 6 * 60000) {
+                                refreshMessage.value =
+                                    'La ONU no respondió. Las lecturas quedan en cola ' +
+                                    'y se harán en su próximo reporte.'
+                                return
+                            }
+                        }
+                    }
+
+                    if (failed.length)
+                        break
+                }
+
+                if (changed)
+                    await applyRefreshedData(deviceId, wasIncomplete)
+
+                if (!alive()) return
+
+                if (failed.length) {
+                    refreshState.value = 'error'
+                    refreshMessage.value =
+                        'La ONU cortó la lectura de ' +
+                        [...new Set(failed.map(f => branchLabel(f.branch)))].join(', ') +
+                        '. El próximo intento se hará por partes más pequeñas.'
+                    return
+                }
+
+                refreshState.value = changed ? 'done' : ''
+
+                setTimeout(() => {
+                    if (alive() && refreshState.value === 'done' && !refreshNewData.value)
+                        refreshState.value = ''
+                }, 4000)
+
+            } catch (e) {
+                if (!alive()) return
+                console.error(e)
+                refreshState.value = 'error'
+                refreshMessage.value = e.message || 'No fue posible leer los datos de la ONU.'
+            }
+        }
+
+        // Al cambiar de pestaña se cargan datos frescos: ya no hace falta el aviso
+        watch(activeTab, () => {
+            refreshNewData.value = false
+            if (refreshState.value === 'done')
+                refreshState.value = ''
+        })
 
 
         
@@ -999,6 +1202,7 @@ onMounted(() => window.addEventListener('keydown', onDetailKeydown))
 onUnmounted(() => window.removeEventListener('keydown', onDetailKeydown))
 
 function closeDevice() {
+            stopRefresh()
             selectedDevice.value = null
         }
 
@@ -3075,6 +3279,12 @@ function formatDate(value) {
 
             openDevice,
             closeDevice,
+            dataStatus,
+            refreshState,
+            refreshMessage,
+            refreshNewData,
+            startRefresh,
+            reloadActiveTab,
 
             formatDate,
             formatUptime
@@ -5146,6 +5356,20 @@ function formatDate(value) {
                                 }}
                             </p>
 
+                            <div class="data-age">
+                                <span v-if="dataStatus && dataStatus.updated_at">
+                                    Datos leídos: {{ formatDate(dataStatus.updated_at) }}
+                                </span>
+                                <button
+                                    class="data-reload"
+                                    :disabled="['reading', 'updating', 'waiting'].includes(refreshState)"
+                                    title="Volver a leer todos los datos desde la ONU (no cambia nada en el equipo)"
+                                    @click="startRefresh(true)"
+                                >
+                                    ↻ Leer de la ONU
+                                </button>
+                            </div>
+
                         </div>
 
 
@@ -5156,6 +5380,52 @@ function formatDate(value) {
                             ×
                         </button>
 
+                    </div>
+
+
+                    <div
+                        v-if="refreshState"
+                        class="refresh-banner"
+                        :class="'refresh-' + refreshState"
+                    >
+                        <span
+                            v-if="['reading', 'updating', 'waiting'].includes(refreshState) && !refreshMessage"
+                            class="refresh-spinner"
+                        ></span>
+
+                        <span class="refresh-text">
+                            <template v-if="refreshMessage">
+                                {{ refreshMessage }}
+                            </template>
+                            <template v-else-if="refreshState === 'reading'">
+                                Leyendo datos del equipo… La primera lectura de una ONU puede tardar unos segundos.
+                            </template>
+                            <template v-else-if="refreshState === 'updating'">
+                                Actualizando datos desde la ONU…
+                            </template>
+                            <template v-else-if="refreshState === 'waiting'">
+                                La ONU no respondió al instante. Los datos llegarán en su próximo reporte; esta vista se actualizará sola.
+                            </template>
+                            <template v-else-if="refreshState === 'done'">
+                                Datos actualizados desde la ONU.
+                            </template>
+                        </span>
+
+                        <button
+                            v-if="refreshNewData"
+                            class="refresh-action"
+                            @click="reloadActiveTab"
+                        >
+                            Mostrar datos nuevos
+                        </button>
+
+                        <button
+                            v-if="refreshState === 'error'"
+                            class="refresh-action"
+                            @click="startRefresh(true)"
+                        >
+                            Reintentar
+                        </button>
                     </div>
 
 

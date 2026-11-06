@@ -177,5 +177,67 @@ class GenieACSClient:
                 "response": body,
             }
 
+    # --- Tareas y faults (lectura bajo demanda) ---------------------------
+
+    async def find_devices(self, query, projection=None, limit=500):
+        params = {"query": json.dumps(query), "limit": limit}
+
+        if projection:
+            params["projection"] = ",".join(projection)
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            r = await client.get(f"{self.base_url}/devices/", params=params)
+            r.raise_for_status()
+            return r.json()
+
+    async def get_tasks(self, device_id):
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            r = await client.get(
+                f"{self.base_url}/tasks/",
+                params={"query": json.dumps({"device": device_id})},
+            )
+            r.raise_for_status()
+            return r.json()
+
+    async def get_faults(self, device_id):
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            r = await client.get(
+                f"{self.base_url}/faults/",
+                params={"query": json.dumps({"device": device_id})},
+            )
+            r.raise_for_status()
+            return r.json()
+
+    async def post_task(self, device_id, task, connection_request=False, wait_ms=3000):
+        """Encola una tarea. Con connection_request despierta a la ONU y
+        espera hasta wait_ms: 200 = la ONU ya la proceso, 202 = en cola."""
+
+        did = quote(device_id, safe="")
+        params = {}
+
+        if connection_request:
+            params = {"connection_request": "", "timeout": wait_ms}
+
+        async with httpx.AsyncClient(timeout=self.timeout + wait_ms / 1000) as client:
+            r = await client.post(
+                f"{self.base_url}/devices/{did}/tasks",
+                params=params,
+                json=task,
+            )
+            r.raise_for_status()
+            return r.status_code
+
+    async def delete_task(self, task_id):
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            r = await client.delete(f"{self.base_url}/tasks/{quote(task_id, safe='')}")
+            if r.status_code != 404:
+                r.raise_for_status()
+
+    async def delete_fault(self, fault_id):
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            r = await client.delete(f"{self.base_url}/faults/{quote(fault_id, safe='')}")
+            if r.status_code != 404:
+                r.raise_for_status()
+
 
 genieacs = GenieACSClient()
