@@ -60,6 +60,9 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
     external_ip = field(obj, "ExternalIPAddress")
     ppp_session = field(obj, "PPPoESessionID")
 
+    # 0.0.0.0 es "sin IP" (p. ej. Huawei mientras intenta conectar).
+    has_ip = external_ip not in (None, "", "0.0.0.0")
+
     if enabled is False:
         operational_status = "Disabled"
 
@@ -68,14 +71,14 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
 
     elif (
         kind == "WANPPPConnection"
-        and external_ip
+        and has_ip
         and ppp_session not in (None, 0, "")
     ):
         operational_status = "Connected"
 
     elif (
         kind == "WANIPConnection"
-        and external_ip
+        and has_ip
     ):
         operational_status = "Connected"
 
@@ -148,7 +151,7 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
         )
 
     if not lan_binding:
-        lan_binding = huawei_lan_binding(obj)
+        lan_binding = huawei_lan_binding(obj) or lan_binding
 
     if isinstance(services, str):
         services = [

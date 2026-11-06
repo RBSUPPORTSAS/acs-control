@@ -16,6 +16,10 @@ def detect_wan_driver(device):
     if not isinstance(wcds, dict):
         return "generic"
 
+    # 0. Huawei: VLAN/802.1p en X_HW_VLAN / X_HW_PRI de la conexion.
+    if huawei_wan(device):
+        return "huawei"
+
     # 1. Arquitectura X_CATV
     # VLAN/802.1p viven en X_CATV_WANGponLinkConfig.
     for index, wcd in wcds.items():
@@ -56,7 +60,7 @@ def huawei_wan(device):
     En Huawei la VLAN va en X_HW_VLAN de la conexion. Los creadores y
     editores de VLAN de ACS-Control escriben X_CT-COM_*, que Huawei no
     tiene: GenieACS los omitiria sin error y la WAN quedaria sin VLAN.
-    Mientras no se valide en laboratorio, esas operaciones se bloquean.
+    Para Huawei se usa app.services.huawei_wan, que traduce los valores.
     """
 
     try:
@@ -80,5 +84,4 @@ def huawei_wan(device):
     return False
 
 
-HUAWEI_CREATE_MSG = "Crear WAN aún no está validado en ONUs Huawei"
-HUAWEI_VLAN_MSG = "Cambiar VLAN o prioridad aún no está validado en ONUs Huawei"
+HUAWEI_CREATE_MSG = "En ONUs Huawei usa la creación estándar de WAN"

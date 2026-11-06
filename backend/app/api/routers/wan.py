@@ -145,11 +145,6 @@ async def create_pppoe_wan(
             detail="ONU no encontrada"
         )
 
-    from app.services.wan_driver import HUAWEI_CREATE_MSG, huawei_wan
-
-    if huawei_wan(device):
-        raise HTTPException(400, HUAWEI_CREATE_MSG)
-
     vlan = int(payload.get("vlan", 0))
 
     if vlan < 1 or vlan > 4094:
@@ -172,7 +167,7 @@ async def create_pppoe_wan(
         after={
             "vlan": vlan,
             "service": "INTERNET",
-            "enabled": detect_wan_driver(device) == "x_ctcom_wan",
+            "enabled": detect_wan_driver(device) in ("x_ctcom_wan", "huawei"),
         },
         result="SOLICITADO",
         message="Creando nueva WAN PPPoE",
@@ -194,6 +189,16 @@ async def create_pppoe_wan(
                 genieacs,
                 device_id,
                 payload,
+            )
+
+        elif driver == "huawei":
+            from app.services.huawei_wan import create_huawei_wan
+
+            result = await create_huawei_wan(
+                genieacs,
+                device_id,
+                payload,
+                mode="PPPOE",
             )
 
         else:
@@ -619,14 +624,6 @@ async def edit_pppoe_wan(
             "WAN protegida: contiene TR069"
         )
 
-    from app.services.wan_driver import HUAWEI_VLAN_MSG, huawei_wan
-
-    if huawei_wan(device) and (
-        ("vlan" in payload and str(payload["vlan"]) != str(wan.get("vlan")))
-        or ("priority" in payload and str(payload["priority"]) != str(wan.get("priority_8021p")))
-    ):
-        raise HTTPException(400, HUAWEI_VLAN_MSG)
-
     base = (
         "InternetGatewayDevice."
         "WANDevice.1."
@@ -779,6 +776,17 @@ async def edit_pppoe_wan(
 
     try:
 
+        # Huawei: X_CT-COM_* -> X_HW_* (VLAN, prioridad, servicios, interfaces)
+
+        from app.services.wan_driver import huawei_wan
+
+        if huawei_wan(device):
+
+            from app.services.huawei_wan import translate
+
+            values = translate(values)
+
+
         await genieacs.set_parameter_values(
             device_id,
             values
@@ -895,11 +903,6 @@ async def create_dhcp_wan(
     if not device:
         raise HTTPException(404, "ONU no encontrada")
 
-    from app.services.wan_driver import HUAWEI_CREATE_MSG, huawei_wan
-
-    if huawei_wan(device):
-        raise HTTPException(400, HUAWEI_CREATE_MSG)
-
     vlan = int(payload.get("vlan", 0))
     priority = int(payload.get("priority", 0))
     mtu = int(payload.get("mtu", 1500))
@@ -925,7 +928,7 @@ async def create_dhcp_wan(
     if mode == "STATIC":
         import ipaddress
 
-        if driver != "x_ctcom_wan":
+        if driver not in ("x_ctcom_wan", "huawei"):
             raise HTTPException(
                 400,
                 "IP fija no está validada para este modelo de ONU",
@@ -949,7 +952,7 @@ async def create_dhcp_wan(
         "vlan": vlan,
         "service": "INTERNET",
         "type": label,
-        "enabled": driver == "x_ctcom_wan",
+        "enabled": driver in ("x_ctcom_wan", "huawei"),
     }
 
     if mode == "STATIC":
@@ -981,6 +984,16 @@ async def create_dhcp_wan(
 
         elif driver == "x_ctcom_wan":
             result = await create_x_ctcom_dhcp(
+                genieacs,
+                device_id,
+                payload,
+                mode=mode,
+            )
+
+        elif driver == "huawei":
+            from app.services.huawei_wan import create_huawei_wan
+
+            result = await create_huawei_wan(
                 genieacs,
                 device_id,
                 payload,
@@ -1710,14 +1723,6 @@ async def edit_pppoe_wan_wcd(
             "WAN protegida: contiene TR069"
         )
 
-    from app.services.wan_driver import HUAWEI_VLAN_MSG, huawei_wan
-
-    if huawei_wan(device) and (
-        ("vlan" in payload and str(payload["vlan"]) != str(wan.get("vlan")))
-        or ("priority" in payload and str(payload["priority"]) != str(wan.get("priority_8021p")))
-    ):
-        raise HTTPException(400, HUAWEI_VLAN_MSG)
-
     base = (
         "InternetGatewayDevice."
         "WANDevice.1."
@@ -1885,6 +1890,17 @@ async def edit_pppoe_wan_wcd(
     )
 
     try:
+
+        # Huawei: X_CT-COM_* -> X_HW_* (VLAN, prioridad, servicios, interfaces)
+
+        from app.services.wan_driver import huawei_wan
+
+        if huawei_wan(device):
+
+            from app.services.huawei_wan import translate
+
+            values = translate(values)
+
 
         await genieacs.set_parameter_values(
             device_id,
@@ -2107,14 +2123,6 @@ async def edit_ip_wan_wcd(
     if wan.get("protected"):
         raise HTTPException(403, "WAN protegida: contiene TR069")
 
-    from app.services.wan_driver import HUAWEI_VLAN_MSG, huawei_wan
-
-    if huawei_wan(device) and (
-        ("vlan" in payload and str(payload["vlan"]) != str(wan.get("vlan")))
-        or ("priority" in payload and str(payload["priority"]) != str(wan.get("priority_8021p")))
-    ):
-        raise HTTPException(400, HUAWEI_VLAN_MSG)
-
     mode = str(
         wan.get("addressing_type") or "DHCP"
     ).upper()
@@ -2263,6 +2271,12 @@ async def edit_ip_wan_wcd(
     )
 
     try:
+        # Huawei: X_CT-COM_* -> X_HW_* (VLAN, prioridad, servicios, interfaces)
+        from app.services.wan_driver import huawei_wan
+        if huawei_wan(device):
+            from app.services.huawei_wan import translate
+            values = translate(values)
+
         await genieacs.set_parameter_values(
             device_id,
             values

@@ -275,8 +275,13 @@ def security_state(device):
         "supported": True,
 
         "firewall_grade": grade,
-        "firewall_label":
-            firewall_label(grade),
+        # Medio/Personalizado solo estan confirmados en Huawei; en el
+        # formato numerico (VSOL) otros valores siguen como "Desconocido".
+        "firewall_label": (
+            firewall_label(grade)
+            if firewall_source(device)[0] == "huawei" or grade in (0, 1)
+            else f"Desconocido ({grade})"
+        ),
 
         "firewall_writable":
             writable(grade_obj),
