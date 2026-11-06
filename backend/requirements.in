@@ -1,7 +1,7 @@
 fastapi
 uvicorn[standard]
 httpx
-SQLAlchemy
+SQLAlchemy[asyncio]
 asyncpg
 redis
 pydantic
