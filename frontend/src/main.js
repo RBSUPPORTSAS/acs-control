@@ -132,6 +132,39 @@ const catvBusy = ref(false)
         })
 
 
+        // Desglose por fabricante para la tarjeta "Fabricantes"
+        const manufacturerBreakdownOpen = ref(false)
+
+        const manufacturerBreakdown = computed(() => {
+
+            const groups = {}
+
+            for (const device of devices.value) {
+
+                if (!device.manufacturer)
+                    continue
+
+                const g = groups[device.manufacturer]
+                    || (groups[device.manufacturer] = {
+                        name: device.manufacturer,
+                        total: 0,
+                        online: 0,
+                        offline: 0
+                    })
+
+                g.total++
+
+                if (device.online) g.online++
+                else g.offline++
+            }
+
+            return Object.values(groups).sort(
+                (a, b) => b.total - a.total
+                    || String(a.name).localeCompare(String(b.name))
+            )
+        })
+
+
         // ====================================================
         // Filtro
         // ====================================================
@@ -559,6 +592,22 @@ const manufacturerOptions = computed(() => {
         }
 
 
+        // Abre Dispositivos con filtros (desde las tarjetas de Inicio)
+        function openInventoryFiltered(filters = {}) {
+
+            clearInventoryFilters()
+
+            if (filters.status)
+                inventoryStatus.value = filters.status
+
+            if (filters.manufacturer)
+                inventoryManufacturer.value = filters.manufacturer
+
+            manufacturerBreakdownOpen.value = false
+            activeView.value = 'dispositivos'
+        }
+
+
         // ====================================================
         // API
         // ====================================================
@@ -858,6 +907,22 @@ async function loadHealth() {
             }
         }
 
+
+// Esc cierra el detalle de la ONU (salvo que haya un formulario abierto)
+function onDetailKeydown(event) {
+
+    if (
+        event.key === 'Escape'
+        && selectedDevice.value
+        && !wanFormOpen.value
+        && !configOpen.value
+    ) {
+        closeDevice()
+    }
+}
+
+onMounted(() => window.addEventListener('keydown', onDetailKeydown))
+onUnmounted(() => window.removeEventListener('keydown', onDetailKeydown))
 
 function closeDevice() {
             selectedDevice.value = null
@@ -2600,6 +2665,9 @@ function formatDate(value) {
 
             activeView,
             openInventory,
+            openInventoryFiltered,
+            manufacturerBreakdown,
+            manufacturerBreakdownOpen,
 
             inventoryStatus,
             inventoryManufacturer,
@@ -2871,7 +2939,15 @@ function formatDate(value) {
                     class="stats"
                 >
 
-                    <div class="stat-card">
+                    <div
+                        class="stat-card stat-card-action"
+                        role="button"
+                        tabindex="0"
+                        title="Ver todas las ONUs"
+                        @click="openInventoryFiltered()"
+                        @keydown.enter="openInventoryFiltered()"
+                        @keydown.space.prevent="openInventoryFiltered()"
+                    >
 
                         <div class="stat-top">
 
@@ -2896,7 +2972,15 @@ function formatDate(value) {
                     </div>
 
 
-                    <div class="stat-card">
+                    <div
+                        class="stat-card stat-card-action"
+                        role="button"
+                        tabindex="0"
+                        title="Ver ONUs en línea"
+                        @click="openInventoryFiltered({ status: 'online' })"
+                        @keydown.enter="openInventoryFiltered({ status: 'online' })"
+                        @keydown.space.prevent="openInventoryFiltered({ status: 'online' })"
+                    >
 
                         <div class="stat-top">
 
@@ -2921,7 +3005,15 @@ function formatDate(value) {
                     </div>
 
 
-                    <div class="stat-card">
+                    <div
+                        class="stat-card stat-card-action"
+                        role="button"
+                        tabindex="0"
+                        title="Ver ONUs fuera de línea"
+                        @click="openInventoryFiltered({ status: 'offline' })"
+                        @keydown.enter="openInventoryFiltered({ status: 'offline' })"
+                        @keydown.space.prevent="openInventoryFiltered({ status: 'offline' })"
+                    >
 
                         <div class="stat-top">
 
@@ -2946,7 +3038,17 @@ function formatDate(value) {
                     </div>
 
 
-                    <div class="stat-card">
+                    <div
+                        class="stat-card stat-card-action"
+                        :class="{ active: manufacturerBreakdownOpen }"
+                        :aria-expanded="manufacturerBreakdownOpen"
+                        role="button"
+                        tabindex="0"
+                        title="Ver ONUs por fabricante"
+                        @click="manufacturerBreakdownOpen = !manufacturerBreakdownOpen"
+                        @keydown.enter="manufacturerBreakdownOpen = !manufacturerBreakdownOpen"
+                        @keydown.space.prevent="manufacturerBreakdownOpen = !manufacturerBreakdownOpen"
+                    >
 
                         <div class="stat-top">
 
@@ -2982,6 +3084,58 @@ function formatDate(value) {
                 <!-- ===================================== -->
                 <!-- INICIO / RESUMEN                      -->
                 <!-- ===================================== -->
+
+                <section
+                    v-if="
+                        activeView === 'inicio'
+                        && manufacturerBreakdownOpen
+                    "
+                    class="manufacturer-breakdown"
+                >
+
+                    <div class="mb-head">
+
+                        <div>
+                            <strong>ONUs por fabricante</strong>
+                            <small>
+                                Haz clic en un fabricante para ver sus ONUs
+                            </small>
+                        </div>
+
+                        <button
+                            class="mb-close"
+                            title="Cerrar"
+                            @click="manufacturerBreakdownOpen = false"
+                        >
+                            ✕
+                        </button>
+
+                    </div>
+
+                    <button
+                        v-for="m in manufacturerBreakdown"
+                        :key="m.name"
+                        class="mb-row"
+                        @click="openInventoryFiltered({ manufacturer: m.name })"
+                    >
+
+                        <span class="mb-name">{{ m.name }}</span>
+
+                        <span class="mb-bar">
+                            <span
+                                class="mb-bar-online"
+                                :style="{ width: (m.online / m.total * 100) + '%' }"
+                            ></span>
+                        </span>
+
+                        <span class="mb-total">{{ m.total }}</span>
+                        <span class="mb-online">{{ m.online }} en línea</span>
+                        <span class="mb-offline">{{ m.offline }} fuera</span>
+
+                    </button>
+
+                </section>
+
 
                 <section
                     v-if="activeView === 'inicio'"
