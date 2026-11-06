@@ -11,7 +11,8 @@ from app.services.genieacs import genieacs
 
 from conftest import login
 
-NOW = datetime(2026, 11, 6, 9, 0, tzinfo=timezone.utc)
+# Hora real: los endpoints comparan con el reloj del sistema.
+NOW = datetime.now(timezone.utc).replace(microsecond=0)
 NEW_ID = "80F1A8-V2802DAC-NUEVA"
 
 
