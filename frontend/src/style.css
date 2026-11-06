@@ -3169,3 +3169,99 @@ tbody tr:hover {
     opacity: .45;
     cursor: not-allowed;
 }
+
+
+/* ==========================================================
+   DETALLE DE ONU: lectura de datos desde la ONU
+   ========================================================== */
+
+.data-age {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    color: #667085;
+    font-size: 11px;
+}
+
+.data-reload {
+    padding: 4px 10px;
+    border: 1px solid #d0d5dd;
+    border-radius: 99px;
+    background: white;
+    color: #344054;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.data-reload:hover:not(:disabled) {
+    background: #f9fafb;
+}
+
+.data-reload:disabled {
+    opacity: .5;
+    cursor: default;
+}
+
+.refresh-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 28px 14px;
+    padding: 10px 14px;
+    border: 1px solid #b2ccff;
+    border-radius: 10px;
+    background: #eff4ff;
+    color: #1d2939;
+    font-size: 13px;
+}
+
+.refresh-banner.refresh-waiting {
+    border-color: #fedf89;
+    background: #fffaeb;
+}
+
+.refresh-banner.refresh-done {
+    border-color: #abefc6;
+    background: #ecfdf3;
+}
+
+.refresh-banner.refresh-error {
+    border-color: #fecdca;
+    background: #fef3f2;
+}
+
+.refresh-text {
+    flex: 1;
+}
+
+.refresh-action {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    background: white;
+    color: #344054;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.refresh-spinner {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #b2ccff;
+    border-top-color: #444ce7;
+    border-radius: 50%;
+    animation: refresh-spin .8s linear infinite;
+}
+
+@keyframes refresh-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
