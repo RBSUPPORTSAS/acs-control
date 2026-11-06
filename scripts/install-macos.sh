@@ -56,7 +56,11 @@ brew services start "postgresql@$PG_VER" || true
 brew services start redis || true
 for i in $(seq 1 30); do "$PG_BIN/pg_isready" -q -h 127.0.0.1 && break; sleep 1; done
 "$PG_BIN/pg_isready" -h 127.0.0.1
-redis-cli ping
+for i in $(seq 1 30); do redis-cli ping >/dev/null 2>&1 && break; sleep 1; done
+if ! redis-cli ping; then
+  echo "Redis no responde. Revise: brew services info redis"
+  exit 1
+fi
 
 # 4. Codigo ----------------------------------------------------------
 paso "4/9 Codigo en $APP"
