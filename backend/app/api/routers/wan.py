@@ -614,12 +614,6 @@ async def edit_pppoe_wan(
             "WAN protegida: contiene TR069"
         )
 
-    if wan.get("enabled"):
-        raise HTTPException(
-            409,
-            "Desactiva la WAN antes de editarla"
-        )
-
     base = (
         "InternetGatewayDevice."
         "WANDevice.1."
@@ -1645,12 +1639,6 @@ async def edit_pppoe_wan_wcd(
             "WAN protegida: contiene TR069"
         )
 
-    if wan.get("enabled"):
-        raise HTTPException(
-            409,
-            "Desactiva la WAN antes de editarla"
-        )
-
     base = (
         "InternetGatewayDevice."
         "WANDevice.1."
@@ -2039,12 +2027,6 @@ async def edit_ip_wan_wcd(
 
     if wan.get("protected"):
         raise HTTPException(403, "WAN protegida: contiene TR069")
-
-    if wan.get("enabled"):
-        raise HTTPException(
-            409,
-            "Desactiva la WAN antes de editarla"
-        )
 
     mode = str(
         wan.get("addressing_type") or "DHCP"

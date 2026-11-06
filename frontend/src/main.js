@@ -961,10 +961,6 @@ function catvState(value) {
                 return
             }
 
-            if (connection.enabled) {
-                alert('Desactiva la WAN antes de editarla.')
-                return
-            }
 
             let type = 'dhcp'
 
@@ -5831,6 +5827,29 @@ function formatDate(value) {
                                             >
                                                 🛡 WAN protegida · TR-069
                                             </div>
+
+                                            <button
+                                                v-if="
+                                                    !connection.protected
+                                                    && (
+                                                        connection.object_type
+                                                        === 'WANPPPConnection'
+                                                        || connection.object_type
+                                                        === 'WANIPConnection'
+                                                    )
+                                                "
+                                                class="wan-edit-button"
+                                                :disabled="
+                                                    wanDeleteBusy
+                                                    === connection.wan_connection_device
+                                                "
+                                                @click="
+                                                    openWanEdit(connection)
+                                                "
+                                                title="Editar WAN"
+                                            >
+                                                Editar WAN
+                                            </button>
 
                                             <button
                                                 v-if="
