@@ -7,9 +7,9 @@ from app.models.base import Base
 
 
 # Roles disponibles:
-# - staff: administracion completa (configuracion, auditoria, usuarios).
+# - admin: administracion completa (configuracion, auditoria, usuarios).
 # - technical: gestion de ONUs sin acceso a datos del servidor GenieACS.
-ROLES = ("staff", "technical")
+ROLES = ("admin", "technical")
 
 
 class User(Base):

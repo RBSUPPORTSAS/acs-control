@@ -2566,12 +2566,12 @@ function formatDate(value) {
         const loginBusy = ref(false)
         const loginError = ref('')
 
-        const isStaff = computed(() =>
-            currentUser.value?.role === 'staff'
+        const isAdmin = computed(() =>
+            currentUser.value?.role === 'admin'
         )
 
         function roleLabel(role) {
-            return role === 'staff' ? 'Staff' : 'Técnico'
+            return role === 'admin' ? 'Admin' : 'Técnico'
         }
 
         // Cualquier 401 de la API (sesion vencida o revocada) vuelve al login.
@@ -2672,7 +2672,7 @@ function formatDate(value) {
 
 
         // ====================================================
-        // USUARIOS (solo staff)
+        // STAFF: gestion de usuarios (solo admin)
         // ====================================================
 
         const usersOpen = ref(false)
@@ -2823,7 +2823,7 @@ function formatDate(value) {
             loginForm,
             loginBusy,
             loginError,
-            isStaff,
+            isAdmin,
             roleLabel,
             login,
             logout,
@@ -3099,7 +3099,7 @@ function formatDate(value) {
 
                     
                     <button
-                        v-if="isStaff"
+                        v-if="isAdmin"
                         class="nav-item"
                         @click="openAudit"
                     >
@@ -3109,7 +3109,7 @@ function formatDate(value) {
 
 
 
-                    <template v-if="isStaff">
+                    <template v-if="isAdmin">
 
                         <div class="nav-section">
                             SISTEMA
@@ -3120,7 +3120,7 @@ function formatDate(value) {
                             @click="openUsers"
                         >
                             <span class="nav-icon">👤</span>
-                            Usuarios
+                            Staff
                         </button>
 
                         <button
@@ -4145,10 +4145,10 @@ function formatDate(value) {
 
             
 
-            <!-- USUARIOS (solo staff) -->
+            <!-- STAFF: gestion de usuarios (solo admin) -->
 
             <div
-                v-if="usersOpen && isStaff"
+                v-if="usersOpen && isAdmin"
                 class="config-overlay"
                 @click.self="closeUsers"
             >
@@ -4159,7 +4159,7 @@ function formatDate(value) {
 
                         <div>
                             <small>👤 SISTEMA</small>
-                            <h2>Usuarios</h2>
+                            <h2>Staff</h2>
                         </div>
 
                         <button class="config-close" @click="closeUsers">
@@ -4181,7 +4181,7 @@ function formatDate(value) {
 
                         <select v-model="userForm.role">
                             <option value="technical">Técnico</option>
-                            <option value="staff">Staff</option>
+                            <option value="admin">Admin</option>
                         </select>
 
                         <input
@@ -4232,7 +4232,7 @@ function formatDate(value) {
                                         @change="updateUser(u, { role: $event.target.value }, 'Cambiar el rol cierra las sesiones abiertas de ' + u.username + '. ¿Continuar?')"
                                     >
                                         <option value="technical">Técnico</option>
-                                        <option value="staff">Staff</option>
+                                        <option value="admin">Admin</option>
                                     </select>
                                 </td>
 
@@ -4274,7 +4274,7 @@ function formatDate(value) {
             <!-- CONFIGURACION 17A2 -->
 
             <div
-                v-if="configOpen && isStaff"
+                v-if="configOpen && isAdmin"
                 class="config-overlay"
                 @click.self="closeConfig"
             >
@@ -4559,7 +4559,7 @@ function formatDate(value) {
 
 
 <div
-                v-if="auditOpen && isStaff"
+                v-if="auditOpen && isAdmin"
                 class="audit-overlay"
             >
                 <section class="audit-panel">

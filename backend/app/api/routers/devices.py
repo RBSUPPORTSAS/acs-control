@@ -7,7 +7,7 @@ from fastapi import Depends, APIRouter, HTTPException, Query
 from app.services.genieacs import genieacs
 from app.services.device_normalizer import NORMALIZE_PROJECTION, normalize_device
 
-from app.api.deps import is_staff, require_user
+from app.api.deps import is_admin, require_user
 from app.models.user import User
 
 
@@ -83,9 +83,9 @@ async def device_detail(
 ):
 
     # El documento crudo incluye la URL del ACS y las credenciales de
-    # connection request: solo staff.
-    if raw and not is_staff(user):
-        raise HTTPException(status_code=403, detail="Requiere rol staff")
+    # connection request: solo admin.
+    if raw and not is_admin(user):
+        raise HTTPException(status_code=403, detail="Requiere rol admin")
 
     try:
         device = await genieacs.get_device(device_id)

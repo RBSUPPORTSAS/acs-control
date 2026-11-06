@@ -1,11 +1,11 @@
-"""Gestion de usuarios (solo staff)."""
+"""Gestion de usuarios (solo admin)."""
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_staff
+from app.api.deps import require_admin
 from app.core.database import get_db
 from app.core.security import delete_user_sessions, hash_password, validate_password
 from app.models.user import ROLES, User
@@ -40,10 +40,10 @@ def user_row(user: User) -> dict:
     }
 
 
-async def active_staff_count(db: AsyncSession) -> int:
+async def active_admin_count(db: AsyncSession) -> int:
     return (
         await db.execute(
-            select(func.count()).select_from(User).where(User.role == "staff", User.active.is_(True))
+            select(func.count()).select_from(User).where(User.role == "admin", User.active.is_(True))
         )
     ).scalar_one()
 
@@ -51,7 +51,7 @@ async def active_staff_count(db: AsyncSession) -> int:
 @router.get("/api/users")
 async def list_users(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_staff),
+    _: User = Depends(require_admin),
 ):
     rows = (await db.execute(select(User).order_by(User.username))).scalars().all()
     return {"users": [user_row(u) for u in rows]}
@@ -61,7 +61,7 @@ async def list_users(
 async def create_user(
     payload: UserCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_staff),
+    _: User = Depends(require_admin),
 ):
     username = payload.username.strip()
 
@@ -100,20 +100,20 @@ async def update_user(
     user_id: int,
     payload: UserUpdate,
     db: AsyncSession = Depends(get_db),
-    me: User = Depends(require_staff),
+    me: User = Depends(require_admin),
 ):
     user = await db.get(User, user_id)
 
     if not user:
         raise HTTPException(404, "Usuario no encontrado")
 
-    loses_staff = (
-        user.role == "staff" and user.active
-        and (payload.role not in (None, "staff") or payload.active is False)
+    loses_admin = (
+        user.role == "admin" and user.active
+        and (payload.role not in (None, "admin") or payload.active is False)
     )
 
-    if loses_staff and await active_staff_count(db) <= 1:
-        raise HTTPException(409, "Debe quedar al menos un usuario staff activo")
+    if loses_admin and await active_admin_count(db) <= 1:
+        raise HTTPException(409, "Debe quedar al menos un usuario admin activo")
 
     if payload.role is not None:
         if payload.role not in ROLES:
@@ -138,7 +138,7 @@ async def update_user(
     # Cambios de rol, estado o contrasena cierran las sesiones abiertas del usuario
     # (salvo la propia sesion de quien cambia su nombre).
     if payload.role is not None or payload.active is not None or payload.password:
-        if user.id != me.id or payload.active is False or payload.role not in (None, "staff"):
+        if user.id != me.id or payload.active is False or payload.role not in (None, "admin"):
             await delete_user_sessions(user.id)
 
     return {"user": user_row(user)}

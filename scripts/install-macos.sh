@@ -116,8 +116,8 @@ paso "7/9 Backend (Python $PY_VER)"
 
 if [ -z "$(cd "$APP" && PYTHONPATH=backend .venv/bin/python -m app.manage_users list)" ]; then
   echo
-  echo "Cree el primer usuario administrador (rol staff):"
-  (cd "$APP" && PYTHONPATH=backend .venv/bin/python -m app.manage_users create --username admin --role staff)
+  echo "Cree el primer usuario administrador (rol admin):"
+  (cd "$APP" && PYTHONPATH=backend .venv/bin/python -m app.manage_users create --username admin --role admin)
 fi
 
 # 8. Frontend --------------------------------------------------------

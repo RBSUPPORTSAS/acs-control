@@ -43,7 +43,7 @@ Compruébelo siempre con `node --version` antes de compilar el frontend.
 
 ## Seguridad
 
-- ACS Control exige iniciar sesión, con dos roles: `staff` (administración completa) y
+- ACS Control exige iniciar sesión, con dos roles: `admin` (administración completa) y
   `technical` (gestión de ONUs sin acceso a datos del servidor GenieACS). Cada guía
   explica cómo crear el primer usuario.
 - Aun así, no lo exponga directamente a Internet: publíquelo solo en la red de operación

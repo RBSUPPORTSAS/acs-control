@@ -1,4 +1,4 @@
-"""Filtro de salida: oculta la direccion del servidor GenieACS a usuarios no staff.
+"""Filtro de salida: oculta la direccion del servidor GenieACS a usuarios no admin.
 
 Muchos mensajes de error incluyen el error tecnico del cliente HTTP, que trae la
 URL completa del NBI. En lugar de revisar cada mensaje, se limpia la respuesta
@@ -38,7 +38,7 @@ def redact_text(text: str) -> str:
     return text
 
 
-class RedactGenieForNonStaff(BaseHTTPMiddleware):
+class RedactGenieForNonAdmin(BaseHTTPMiddleware):
 
     async def dispatch(self, request, call_next):
         response = await call_next(request)
@@ -46,7 +46,7 @@ class RedactGenieForNonStaff(BaseHTTPMiddleware):
         role = getattr(request.state, "user_role", None)
         content_type = response.headers.get("content-type", "")
 
-        if role == "staff" or not request.url.path.startswith("/api/"):
+        if role == "admin" or not request.url.path.startswith("/api/"):
             return response
 
         if "json" not in content_type and "text" not in content_type:

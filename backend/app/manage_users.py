@@ -2,7 +2,7 @@
 
 Uso (desde la raiz del repositorio):
 
-    PYTHONPATH=backend .venv/bin/python -m app.manage_users create --username admin --role staff
+    PYTHONPATH=backend .venv/bin/python -m app.manage_users create --username admin --role admin
     PYTHONPATH=backend .venv/bin/python -m app.manage_users reset-password --username admin
     PYTHONPATH=backend .venv/bin/python -m app.manage_users list
 

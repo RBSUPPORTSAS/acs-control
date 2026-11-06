@@ -97,9 +97,9 @@ async def test_health_publico_sin_detalles(client):
     assert not any(k.endswith("_error") for k in data)
 
 
-# ---------------------------------------------------------- permisos staff
+# ---------------------------------------------------------- permisos admin
 
-async def test_staff_ve_todo(client):
+async def test_admin_ve_todo(client):
     await login(client, "jefe")
     assert (await client.get("/api/system/config")).json()["genieacs_nbi_url"] == GENIE_URL
     assert (await client.get("/api/audit")).status_code == 200
@@ -107,10 +107,10 @@ async def test_staff_ve_todo(client):
     raw = (await client.get(f"/api/devices/{DID}?raw=true")).json()
     assert raw["raw"]["_id"] == DEVICE_ID
     r = await client.get("/api/devices/falla")
-    assert "10.99.0.5" in r.text  # staff si ve el error tecnico completo
+    assert "10.99.0.5" in r.text  # admin si ve el error tecnico completo
 
 
-async def test_health_con_detalles_para_staff(client):
+async def test_health_con_detalles_para_admin(client):
     await login(client, "jefe")
     data = (await client.get("/api/health")).json()
     assert any(k.endswith("_error") for k in data)
@@ -118,7 +118,7 @@ async def test_health_con_detalles_para_staff(client):
 
 # ------------------------------------------------------------- usuarios
 
-async def test_staff_crea_usuario_technical_y_este_inicia_sesion(client):
+async def test_admin_crea_usuario_technical_y_este_inicia_sesion(client):
     await login(client, "jefe")
     r = await client.post("/api/users", json={"username": "nuevo", "role": "technical", "password": "clave-nueva-123"})
     assert r.status_code == 201
@@ -135,7 +135,7 @@ async def test_validaciones_de_usuario(client):
     assert (await client.post("/api/users", json={"username": "TECNICO", "password": "clave-larga-123"})).status_code == 409
 
 
-async def test_no_se_puede_quedar_sin_staff(client):
+async def test_no_se_puede_quedar_sin_admin(client):
     await login(client, "jefe")
     users = (await client.get("/api/users")).json()["users"]
     jid = next(u["id"] for u in users if u["username"] == "jefe")

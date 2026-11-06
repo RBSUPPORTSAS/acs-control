@@ -16,7 +16,7 @@ ACS Control provides a normalized API and web interface for managing heterogeneo
 - Protected TR-069 WAN detection
 - Device firewall and remote-management controls
 - Audit log (con el usuario que hizo cada cambio)
-- Login con roles: staff (administración) y technical (gestión de ONUs)
+- Login con roles: admin (administración) y technical (gestión de ONUs)
 - REST API with FastAPI/OpenAPI
 - Vue 3 web interface
 - PostgreSQL and Redis
@@ -59,7 +59,7 @@ siga [docs/install/linux.md](docs/install/linux.md).
 
 **Proxmox VE** (contenedor LXC): siga [docs/install/proxmox-lxc.md](docs/install/proxmox-lxc.md).
 
-> ACS Control exige iniciar sesión, con roles `staff` y `technical`. El instalador pide
+> ACS Control exige iniciar sesión, con roles `admin` y `technical`. El instalador pide
 > crear el primer usuario administrador. No lo exponga directamente a Internet.
 
 ## API documentation

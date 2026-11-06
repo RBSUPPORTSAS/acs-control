@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.database import engine
 from app.services.genieacs import genieacs
 
-from app.api.deps import get_optional_user, is_staff, require_staff
+from app.api.deps import get_optional_user, is_admin, require_admin
 from app.models.user import User
 
 
@@ -82,8 +82,8 @@ async def health(user: User | None = Depends(get_optional_user)):
     status_code = 200 if result["healthy"] else 503
 
     # Los mensajes de error pueden incluir direcciones internas:
-    # solo se muestran a staff.
-    if not is_staff(user):
+    # solo se muestran a admin.
+    if not is_admin(user):
         result = {
             key: value
             for key, value in result.items()
@@ -98,7 +98,7 @@ async def health(user: User | None = Depends(get_optional_user)):
 
 # ACS_SYSTEM_CONFIG_17A2
 @router.get("/api/system/config")
-async def system_configuration(_: User = Depends(require_staff)):
+async def system_configuration(_: User = Depends(require_admin)):
 
     # No exponemos APP_SECRET_KEY,
     # DATABASE_URL ni ninguna credencial.

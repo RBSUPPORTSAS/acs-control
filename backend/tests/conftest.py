@@ -60,7 +60,7 @@ DEVICE = {
     },
 }
 
-PASSWORDS = {"jefe": "clave-staff-123", "tecnico": "clave-tecnico-123"}
+PASSWORDS = {"jefe": "clave-admin-123", "tecnico": "clave-tecnico-123"}
 
 
 @pytest.fixture
@@ -100,7 +100,7 @@ async def client(monkeypatch):
     monkeypatch.setattr(genieacs, "get_device", fake_get_device)
 
     async with Session() as db:
-        db.add(User(username="jefe", role="staff", password_hash=hash_password(PASSWORDS["jefe"])))
+        db.add(User(username="jefe", role="admin", password_hash=hash_password(PASSWORDS["jefe"])))
         db.add(User(username="tecnico", role="technical", password_hash=hash_password(PASSWORDS["tecnico"])))
         await db.commit()
 

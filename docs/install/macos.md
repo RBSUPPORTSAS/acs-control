@@ -29,7 +29,7 @@ El script:
 3. Crea el rol y la base `acs_control` con una clave aleatoria.
 4. Genera `.env` (permisos `600`) apuntando a su GenieACS.
 5. Instala el backend en `.venv` y crea las tablas.
-   Si no hay usuarios, **pide crear el primer administrador** (`admin`, rol `staff`).
+   Si no hay usuarios, **pide crear el primer administrador** (`admin`, rol `admin`).
 6. Compila el frontend y arranca todo.
 
 Se puede ejecutar varias veces: lo ya instalado se omite y el `.env` existente se conserva.
@@ -42,16 +42,16 @@ Al terminar:
 | Interfaz | http://127.0.0.1:4173 |
 | API (documentación) | http://127.0.0.1:8000/docs |
 
-## Usuarios
+## Usuarios (Staff)
 
 ACS Control tiene dos roles:
 
 | Rol | Acceso |
 |---|---|
-| `staff` | Todo: gestión de ONUs, auditoría, configuración y usuarios |
+| `admin` | Todo: gestión de ONUs, auditoría, configuración y usuarios (sección Staff) |
 | `technical` | Gestión de ONUs (WAN, Wi-Fi, CATV, etiquetas). No ve datos del servidor GenieACS, ni la auditoría, ni la configuración |
 
-Los usuarios se crean desde la interfaz (**Sistema → Usuarios**, solo staff) o desde la terminal:
+Los usuarios se crean desde la interfaz (**Sistema → Staff**, solo admin) o desde la terminal:
 
 ```bash
 cd ~/acs-control
@@ -90,7 +90,7 @@ chmod 600 .env
 "$(brew --prefix python@3.12)/bin/python3.12" -m venv .venv
 .venv/bin/pip install -r backend/requirements.txt
 PYTHONPATH=backend .venv/bin/python -m app.bootstrap_db
-PYTHONPATH=backend .venv/bin/python -m app.manage_users create --username admin --role staff
+PYTHONPATH=backend .venv/bin/python -m app.manage_users create --username admin --role admin
 
 (cd frontend && npm ci && npm run build)
 

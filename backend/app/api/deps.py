@@ -38,14 +38,14 @@ async def require_user(
     return user
 
 
-async def require_staff(
+async def require_admin(
     user: User = Depends(require_user),
 ) -> User:
-    if user.role != "staff":
-        raise HTTPException(status_code=403, detail="Requiere rol staff")
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Requiere rol admin")
 
     return user
 
 
-def is_staff(user: User | None) -> bool:
-    return bool(user and user.role == "staff")
+def is_admin(user: User | None) -> bool:
+    return bool(user and user.role == "admin")

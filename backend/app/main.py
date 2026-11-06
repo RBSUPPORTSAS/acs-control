@@ -5,8 +5,8 @@ Cada grupo de endpoints vive en app/api/routers/.
 
 from fastapi import Depends, FastAPI
 
-from app.api.deps import require_staff, require_user
-from app.core.redaction import RedactGenieForNonStaff
+from app.api.deps import require_admin, require_user
+from app.core.redaction import RedactGenieForNonAdmin
 
 from app.api.routers import auth
 from app.api.routers import system
@@ -25,14 +25,14 @@ app = FastAPI(
     version="0.1.0",
 )
 
-app.add_middleware(RedactGenieForNonStaff)
+app.add_middleware(RedactGenieForNonAdmin)
 
 # Publico: inicio/cierre de sesion. /, /api/health y /api/system/config
 # controlan sus permisos dentro del router system.
 app.include_router(auth.router)
 app.include_router(system.router)
 
-# Cualquier usuario con sesion (staff y technical): gestion de ONUs.
+# Cualquier usuario con sesion (admin y technical): gestion de ONUs.
 logged_in = [Depends(require_user)]
 app.include_router(devices.router, dependencies=logged_in)
 app.include_router(wifi.router, dependencies=logged_in)
@@ -40,7 +40,7 @@ app.include_router(catv.router, dependencies=logged_in)
 app.include_router(wan.router, dependencies=logged_in)
 app.include_router(security.router, dependencies=logged_in)
 
-# Solo staff.
-staff_only = [Depends(require_staff)]
-app.include_router(audit.router, dependencies=staff_only)
-app.include_router(users.router, dependencies=staff_only)
+# Solo admin.
+admin_only = [Depends(require_admin)]
+app.include_router(audit.router, dependencies=admin_only)
+app.include_router(users.router, dependencies=admin_only)
