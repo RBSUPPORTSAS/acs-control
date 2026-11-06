@@ -218,14 +218,26 @@ class GenieACSClient:
         if connection_request:
             params = {"connection_request": "", "timeout": wait_ms}
 
-        async with httpx.AsyncClient(timeout=self.timeout + wait_ms / 1000) as client:
-            r = await client.post(
-                f"{self.base_url}/devices/{did}/tasks",
-                params=params,
-                json=task,
-            )
-            r.raise_for_status()
-            return r.status_code
+        # GenieACS puede mantener la peticion abierta hasta que la ONU
+        # termine toda la sesion (en Huawei, decenas de segundos). La tarea
+        # ya quedo guardada: si se agota la espera, se trata como "en cola"
+        # y el estado se consulta despues.
+        wait = (wait_ms / 1000 + 5) if connection_request else self.timeout
+
+        try:
+            async with httpx.AsyncClient(timeout=wait) as client:
+                r = await client.post(
+                    f"{self.base_url}/devices/{did}/tasks",
+                    params=params,
+                    json=task,
+                )
+                r.raise_for_status()
+                return r.status_code
+
+        except httpx.TimeoutException:
+            if connection_request:
+                return 202
+            raise
 
     async def delete_task(self, task_id):
         async with httpx.AsyncClient(timeout=self.timeout) as client:

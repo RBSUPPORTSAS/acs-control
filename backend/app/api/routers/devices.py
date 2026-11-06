@@ -144,9 +144,13 @@ async def device_refresh_request(device_id: str, force: bool = False):
         raise
 
     except Exception as exc:
+        # Algunos errores (p. ej. timeouts de httpx) no traen mensaje.
         raise HTTPException(
             status_code=502,
-            detail=f"No fue posible pedir la lectura a GenieACS: {exc}",
+            detail=(
+                "No fue posible pedir la lectura a GenieACS: "
+                f"{str(exc) or type(exc).__name__}"
+            ),
         )
 
     return result
