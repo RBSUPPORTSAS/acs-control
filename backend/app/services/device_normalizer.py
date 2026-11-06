@@ -48,6 +48,27 @@ def online_status(last_inform):
         return False
 
 
+# Campos que usa normalize_device. Sirve como proyeccion al listar ONUs para
+# no descargar el arbol completo de cada una.
+NORMALIZE_PROJECTION = [
+    "_id",
+    "_deviceId",
+    "_lastInform",
+    "_tags",
+] + [
+    f"{root}.DeviceInfo.{name}"
+    for root in ("InternetGatewayDevice", "Device")
+    for name in (
+        "Manufacturer",
+        "ProductClass",
+        "SerialNumber",
+        "SoftwareVersion",
+        "HardwareVersion",
+        "UpTime",
+    )
+]
+
+
 def normalize_device(device: dict):
 
     device_id = device.get("_deviceId", {})

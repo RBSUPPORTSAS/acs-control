@@ -1,3 +1,5 @@
+import json
+
 import httpx
 from urllib.parse import quote
 
@@ -10,17 +12,30 @@ class GenieACSClient:
         self.base_url = settings.genieacs_nbi_url.rstrip("/")
         self.timeout = settings.genieacs_timeout
 
-    async def get_devices(self, limit=100):
+    async def get_devices(self, limit=100, projection=None):
+        params = {"limit": limit}
+
+        if projection:
+            params["projection"] = ",".join(projection)
+
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             r = await client.get(
                 f"{self.base_url}/devices/",
-                params={"limit": limit},
+                params=params,
             )
             r.raise_for_status()
             return r.json()
 
     async def get_device(self, device_id):
-        devices = await self.get_devices(limit=10000)
+        # Consulta solo esta ONU por su _id. Antes se descargaban todas las
+        # ONUs completas (decenas de MB) para filtrar una en Python.
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            r = await client.get(
+                f"{self.base_url}/devices/",
+                params={"query": json.dumps({"_id": device_id})},
+            )
+            r.raise_for_status()
+            devices = r.json()
 
         for device in devices:
             if device.get("_id") == device_id:

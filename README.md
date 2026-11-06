@@ -32,19 +32,11 @@ Read [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) before changing device-managem
 
 ## Installation
 
-Para una instalación completa en Debian, incluyendo dependencias, PostgreSQL,
-Redis, FastAPI, Vue 3, systemd y Nginx:
+Guías por plataforma: [docs/INSTALL.md](docs/INSTALL.md)
 
-[Guía completa de instalación](docs/INSTALL.md)
-
-Quick clone:
-
-```bash
-git clone https://github.com/RBSUPPORTSAS/acs-control.git
-cd acs-control
-```
-
-Luego siga la guía de instalación.
+- [Linux (Debian 12/13, Ubuntu 22.04/24.04)](docs/install/linux.md): producción con systemd y Nginx.
+- [Proxmox VE (contenedor LXC)](docs/install/proxmox-lxc.md): producción.
+- [macOS](docs/install/macos.md): desarrollo y pruebas locales.
 
 ## Quick start
 
