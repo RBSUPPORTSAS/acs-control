@@ -6162,6 +6162,13 @@ function formatDate(value) {
 
                                     </div>
 
+                                    <small
+                                        v-if="catv.driver === 'x_rz_catv' && !(catv.metrics || []).length"
+                                    >
+                                        Esta ONU no reporta mediciones de RF por TR-069
+                                        (potencia, nivel de salida, AGC).
+                                    </small>
+
                                     <div class="catv-control-box">
 
                                         <strong>

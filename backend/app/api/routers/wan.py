@@ -806,8 +806,8 @@ async def edit_pppoe_wan(
         # Huawei/Realtek/X_CATV: X_CT-COM_* -> nombres del fabricante
         from app.services.wan_driver import detect_wan_driver as _drv
         if _drv(device) in ("huawei", "realtek", "x_catv_wan"):
-            from app.services.vendor_wan import translate, vendor_of
-            values = translate(values, vendor_of(_drv(device)))
+            from app.services.vendor_wan import translate, vendor_for
+            values = translate(values, vendor_for(device, _drv(device)))
 
 
         await genieacs.set_parameter_values(
@@ -1991,8 +1991,8 @@ async def edit_pppoe_wan_wcd(
         # Huawei/Realtek/X_CATV: X_CT-COM_* -> nombres del fabricante
         from app.services.wan_driver import detect_wan_driver as _drv
         if _drv(device) in ("huawei", "realtek", "x_catv_wan"):
-            from app.services.vendor_wan import translate, vendor_of
-            values = translate(values, vendor_of(_drv(device)))
+            from app.services.vendor_wan import translate, vendor_for
+            values = translate(values, vendor_for(device, _drv(device)))
 
 
         await genieacs.set_parameter_values(
@@ -2383,8 +2383,8 @@ async def edit_ip_wan_wcd(
         # Huawei/Realtek/X_CATV: X_CT-COM_* -> nombres del fabricante
         from app.services.wan_driver import detect_wan_driver as _drv
         if _drv(device) in ("huawei", "realtek", "x_catv_wan"):
-            from app.services.vendor_wan import translate, vendor_of
-            values = translate(values, vendor_of(_drv(device)))
+            from app.services.vendor_wan import translate, vendor_for
+            values = translate(values, vendor_for(device, _drv(device)))
 
         await genieacs.set_parameter_values(
             device_id,
