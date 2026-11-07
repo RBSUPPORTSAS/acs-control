@@ -116,8 +116,8 @@ def realtek_wan(device):
 REALTEK_CREATE_MSG = "En esta ONU usa la creación estándar de WAN"
 
 
-# Familias que ACS-Control solo muestra: sin escrituras (WAN, WiFi, CATV,
-# seguridad). Las rutas de escritura llaman a app.api.certified.ensure_certified.
+# Nivel "No certificado" (ver decisiones-y-estado): solo SSID/clave WiFi y
+# ver datos; sin escrituras de WAN, CATV ni seguridad. Las rutas de escritura llaman a app.api.certified.ensure_certified.
 # X_CATV (KM1303, SML-702XW, ONT1GE...): en la KM1303 la WAN de gestion
 # no se publica por TR-069, cada sesion tarda ~30 s y crear PPPoE dejo
 # su cliente TR-069 sin responder. La gestion probada (DHCP / IP fija)
@@ -125,7 +125,7 @@ REALTEK_CREATE_MSG = "En esta ONU usa la creación estándar de WAN"
 UNCERTIFIED = {
     "x_catv_wan": (
         "Modelo no certificado: ACS-Control solo muestra sus datos. "
-        "La gestión (WAN, WiFi, CATV y seguridad) está desactivada para esta ONU."
+        "Permite cambiar SSID y clave WiFi; WAN, CATV y seguridad están desactivados."
     ),
 }
 

@@ -305,7 +305,6 @@ async def test_lectura_indica_modelo_no_certificado(client, km):
     ("patch", "wan/1/ip/1", {"vlan": 151}),
     ("post", "wan/1/ip/1/disable", None),
     ("delete", "wan/1/WANIPConnection/1", None),
-    ("patch", "wifi/1", {"ssid": "x"}),
     ("post", "catv/off", None),
 ])
 async def test_escrituras_bloqueadas(client, km, monkeypatch, method, path, body):
@@ -324,6 +323,18 @@ async def test_escrituras_bloqueadas(client, km, monkeypatch, method, path, body
     assert r.status_code == 403, r.text
     assert "no certificado" in r.json()["detail"]
     assert sent == []
+
+
+async def test_wifi_sigue_permitido(client, km, monkeypatch):
+    """Nivel no certificado: SSID y clave WiFi si se pueden cambiar."""
+    async def fake(*a, **k):
+        return {"http_status": 200}
+
+    monkeypatch.setattr(genieacs, "set_parameter_values", fake)
+    monkeypatch.setattr(genieacs, "post_task", fake)
+    await login(client, "jefe")
+    r = await client.patch(f"/api/devices/{ID}/wifi/1", json={"ssid": "x"})
+    assert "no certificado" not in r.text
 
 
 def test_otras_marcas_siguen_certificadas():

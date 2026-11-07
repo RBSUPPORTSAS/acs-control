@@ -3280,7 +3280,6 @@ tbody tr:hover {
 .read-only .wan-add-button,
 .read-only .wan-edit-button,
 .read-only .wan-delete-button,
-.read-only .wifi-save-btn,
 .read-only .catv-buttons {
     display: none !important;
 }
