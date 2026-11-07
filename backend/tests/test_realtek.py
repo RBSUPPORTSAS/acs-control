@@ -132,17 +132,110 @@ async def test_no_borra_tr069(client, rt):
     assert r.status_code == 403
 
 
-@pytest.mark.parametrize("path", ["wan/create-dhcp", "wan/create-ip", "wan/create-pppoe", "wan/vsol/create-ip", "wan/vsol/create-pppoe"])
-async def test_crear_bloqueado(client, rt, path):
+async def test_rutas_vsol_siguen_bloqueadas(client, rt):
     await login(client, "jefe")
-    r = await client.post(f"/api/devices/{ID}/{path}", json={"vlan": 999, "username": "u", "password": "p"})
-    assert r.status_code == 400
-    assert "no está validado" in r.json()["detail"]
+    for path in ("wan/vsol/create-ip", "wan/vsol/create-pppoe"):
+        r = await client.post(f"/api/devices/{ID}/{path}", json={"vlan": 999, "username": "u", "password": "p"})
+        assert r.status_code == 400
 
 
-@pytest.mark.parametrize("body", [{"vlan": 71}, {"priority": 3}, {"bindings": ["InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1"]}])
-async def test_editar_vlan_prioridad_interfaces_bloqueado(client, rt, body):
+# --- Escritura (validada en la IGD real) ------------------------------------------
+
+from app.services.vendor_wan import create_vendor_wan, rtk_service_type, translate  # noqa: E402
+
+CONN = "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.3.WANIPConnection.1"
+
+
+def test_traduce_a_realtek():
+    out = translate([
+        [f"{CONN}.X_CT-COM_VLANIDMark", 999, "xsd:unsignedInt"],
+        [f"{CONN}.X_CT-COM_802-1pMark", 3, "xsd:unsignedInt"],
+        [f"{CONN}.X_CT-COM_ServiceList", "INTERNET", "xsd:string"],
+        [f"{CONN}.X_CT-COM_LanInterface", "InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.2,InternetGatewayDevice.LANDevice.1.WLANConfiguration.5", "xsd:string"],
+        [f"{CONN}.X_CT-COM_VLANMode", 1, "xsd:unsignedInt"],
+        ["InternetGatewayDevice.WANDevice.1.WANConnectionDevice.3.X_CT-COM_WANGponLinkConfig.Mode", 2, "xsd:unsignedInt"],
+        [f"{CONN}.NATEnabled", True, "xsd:boolean"],
+    ], "realtek")
+    by = {p.rsplit(".", 1)[1]: (v, t) for p, v, t in out}
+    assert by["X_RTK_VlanId"] == (999, "xsd:int")
+    assert by["X_RZ_802-1pMark"] == (3, "xsd:unsignedInt")
+    assert by["X_RTK_ServiceType"] == (2, "xsd:int")
+    assert by["X_RTK_LanInterface"] == ("lan2,ssid5", "xsd:string")
+    assert not [p for p, _, _ in out if "X_CT-COM" in p or "GponLink" in p]
+
+
+def test_mascara_de_servicio_al_escribir():
+    assert rtk_service_type("INTERNET") == 2
+    assert rtk_service_type("TR069,INTERNET") == 3
+    with pytest.raises(ValueError):
+        rtk_service_type("IPTV")
+
+
+class FakeClient:
+    def __init__(self):
+        self.device = igd()
+        self.calls = []
+
+    async def get_device(self, device_id):
+        return self.device
+
+    async def add_object(self, device_id, name):
+        wcds = self.device["InternetGatewayDevice"]["WANDevice"]["1"]["WANConnectionDevice"]
+        if name.endswith("WANConnectionDevice"):
+            wcds["3"] = {}
+        else:
+            wcds["3"][name.rsplit(".", 1)[1]] = {"1": {}}
+        return {"http_status": 200}
+
+    async def post_task(self, device_id, task, connection_request=False, wait_ms=3000):
+        self.calls.append(("task", task["objectName"]))
+        return 200
+
+    async def set_parameter_values(self, device_id, values):
+        self.calls.append(("set", values))
+        return {"http_status": 200}
+
+
+@pytest.mark.parametrize("mode,container", [("DHCP", "WANIPConnection"), ("STATIC", "WANIPConnection"), ("PPPOE", "WANPPPConnection")])
+async def test_crear_wan_realtek(monkeypatch, mode, container):
+    from app.services import x_ctcom_wan_creator as c
+
+    async def no_sleep(_):
+        return None
+    monkeypatch.setattr(c.asyncio, "sleep", no_sleep)
+
+    client = FakeClient()
+    data = {"vlan": 999, "priority": 0, "username": "u", "password": "p", "ip": "192.0.2.10",
+            "subnet_mask": "255.255.255.0", "gateway": "192.0.2.1", "dns": "8.8.8.8"}
+    result = await create_vendor_wan(client, ID, data, mode=mode, vendor="realtek")
+    assert (result["wcd"], result["driver"]) == (3, "realtek")
+
+    base = f"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.3.{container}.1"
+    sets = [x[1] for x in client.calls if x[0] == "set"]
+    flat = {p: v for batch in sets for p, v, _ in batch}
+    assert flat[f"{base}.X_RTK_VlanId"] == 999
+    assert flat[f"{base}.X_RTK_ServiceType"] == 2
+    assert ("task", base) in client.calls
+    assert sets[-1] == [[f"{base}.Enable", True, "xsd:boolean"]]
+    assert not [p for p in flat if "X_CT-COM" in p or ".WANConnectionDevice.1." in p or ".WANConnectionDevice.2." in p]
+
+
+async def test_editar_vlan_realtek_envia_x_rtk(client, rt, monkeypatch):
+    import asyncio
+    sent = []
+
+    async def capture(device_id, values):
+        sent.extend(values)
+        return {"http_status": 200}
+
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(genieacs, "set_parameter_values", capture)
+    monkeypatch.setattr(asyncio, "sleep", no_sleep)
     await login(client, "jefe")
-    r = await client.patch(f"/api/devices/{ID}/wan/1/pppoe/1", json=body)
-    assert r.status_code == 400
-    assert "no está validado" in r.json()["detail"]
+    r = await client.patch(f"/api/devices/{ID}/wan/1/pppoe/1", json={"vlan": 71, "priority": 3})
+    assert r.status_code == 200, r.text
+    by = {p.rsplit(".", 1)[1]: v for p, v, _ in sent}
+    assert by.get("X_RTK_VlanId") == 71 and by.get("X_RZ_802-1pMark") == 3
+    assert not [p for p, _, _ in sent if "X_CT-COM" in p or "GponLink" in p]
