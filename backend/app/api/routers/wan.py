@@ -13,6 +13,15 @@ from app.services.device_normalizer import normalize_device
 router = APIRouter()
 
 
+
+def confirm_tries(device):
+    """Intentos de 2 s para confirmar un cambio. Las X_CATV (KM1303...)
+    tardan ~30 s en abrir sesion tras la connection request."""
+
+    from app.services.wan_driver import detect_wan_driver
+
+    return 25 if detect_wan_driver(device) == "x_catv_wan" else 5
+
 # ACS_WAN_READ_11A
 @router.get("/api/devices/{device_id}/wan")
 async def device_wan(device_id: str):
@@ -159,6 +168,11 @@ async def create_pppoe_wan(
             detail="Usuario PPPoE obligatorio"
         )
 
+    from app.services.x_catv_wan_creator import PPPOE_BLOCKED_MSG
+
+    if detect_wan_driver(device) == "x_catv_wan":
+        raise HTTPException(status_code=400, detail=PPPOE_BLOCKED_MSG)
+
     audit = await add_audit(
         db=db,
         action="WAN_CREAR_PPPOE",
@@ -167,7 +181,7 @@ async def create_pppoe_wan(
         after={
             "vlan": vlan,
             "service": "INTERNET",
-            "enabled": detect_wan_driver(device) in ("x_ctcom_wan", "huawei", "realtek"),
+            "enabled": detect_wan_driver(device) in ("x_ctcom_wan", "huawei", "realtek", "x_catv_wan"),
         },
         result="SOLICITADO",
         message="Creando nueva WAN PPPoE",
@@ -516,7 +530,7 @@ async def toggle_pppoe_wan(
 
         confirmed = False
 
-        for _ in range(4):
+        for _ in range(max(4, confirm_tries(device))):
             await asyncio.sleep(2)
 
             current_device = await genieacs.get_device(device_id)
@@ -776,11 +790,11 @@ async def edit_pppoe_wan(
     )
 
     try:
-        # Huawei/Realtek: X_CT-COM_* -> nombres del fabricante
+        # Huawei/Realtek/X_CATV: X_CT-COM_* -> nombres del fabricante
         from app.services.wan_driver import detect_wan_driver as _drv
-        if _drv(device) in ("huawei", "realtek"):
-            from app.services.vendor_wan import translate
-            values = translate(values, _drv(device))
+        if _drv(device) in ("huawei", "realtek", "x_catv_wan"):
+            from app.services.vendor_wan import translate, vendor_of
+            values = translate(values, vendor_of(_drv(device)))
 
 
         await genieacs.set_parameter_values(
@@ -794,7 +808,7 @@ async def edit_pppoe_wan(
         # solamente los campos observables.
         observable = dict(requested)
 
-        for _ in range(4):
+        for _ in range(max(4, confirm_tries(device))):
 
             await asyncio.sleep(2)
 
@@ -913,7 +927,7 @@ async def create_dhcp_wan(
         raise HTTPException(400, "MTU inválido")
 
     # /create-ip acepta addressing_type DHCP o STATIC. IP fija fuera de
-    # VSOL solo esta validada en la familia x_ctcom (p. ej. HG102DWT).
+    # VSOL: x_ctcom (HG102DWT), Huawei, Realtek y X_CATV (KM1303).
     mode = str(payload.get("addressing_type") or "DHCP").upper()
 
     if mode not in ("DHCP", "STATIC"):
@@ -924,7 +938,7 @@ async def create_dhcp_wan(
     if mode == "STATIC":
         import ipaddress
 
-        if driver not in ("x_ctcom_wan", "huawei", "realtek"):
+        if driver not in ("x_ctcom_wan", "huawei", "realtek", "x_catv_wan"):
             raise HTTPException(
                 400,
                 "IP fija no está validada para este modelo de ONU",
@@ -948,7 +962,7 @@ async def create_dhcp_wan(
         "vlan": vlan,
         "service": "INTERNET",
         "type": label,
-        "enabled": driver in ("x_ctcom_wan", "huawei", "realtek"),
+        "enabled": driver in ("x_ctcom_wan", "huawei", "realtek", "x_catv_wan"),
     }
 
     if mode == "STATIC":
@@ -976,6 +990,7 @@ async def create_dhcp_wan(
                 genieacs,
                 device_id,
                 payload,
+                mode=mode,
             )
 
         elif driver == "x_ctcom_wan":
@@ -1484,7 +1499,7 @@ async def toggle_pppoe_wan_wcd(
 
         confirmed = False
 
-        for _ in range(4):
+        for _ in range(max(4, confirm_tries(device))):
             await asyncio.sleep(2)
 
             current = await genieacs.get_device(device_id)
@@ -1626,29 +1641,61 @@ async def delete_wan_wcd(
         f"WANConnectionDevice.{wcd}"
     )
 
+    from app.services.wan_driver import detect_wan_driver
+
+    x_catv = detect_wan_driver(device) == "x_catv_wan"
+
     try:
 
-        await genieacs.delete_object(
-            device_id,
-            object_name
-        )
+        if x_catv:
+            from app.services.x_catv_wan_creator import (
+                SESSION_MS,
+                clean_ghost_faults,
+                now_stamp,
+                real_wcds,
+            )
+
+            since = now_stamp()
+
+            # Esperar la sesion completa (~30 s en abrir).
+            await genieacs.post_task(
+                device_id,
+                {"name": "deleteObject", "objectName": object_name},
+                connection_request=True,
+                wait_ms=SESSION_MS,
+            )
+
+        else:
+            await genieacs.delete_object(
+                device_id,
+                object_name
+            )
 
         confirmed = False
 
-        for _ in range(6):
+        for _ in range(max(6, confirm_tries(device))):
             await asyncio.sleep(2)
 
             current = await genieacs.get_device(device_id)
-            current_wans = read_wan(current)
 
-            exists = any(
-                w.get("wan_connection_device") == wcd
-                for w in current_wans
-            )
+            if x_catv:
+                # La ONU sigue listando el WCD borrado como "fantasma"
+                # (sin VLAN): se considera eliminado.
+                exists = wcd in real_wcds(current)
+            else:
+                current_wans = read_wan(current)
+
+                exists = any(
+                    w.get("wan_connection_device") == wcd
+                    for w in current_wans
+                )
 
             if not exists:
                 confirmed = True
                 break
+
+        if x_catv:
+            await clean_ghost_faults(genieacs, device_id, object_name, since)
 
         status = (
             "CONFIRMADO"
@@ -1897,11 +1944,11 @@ async def edit_pppoe_wan_wcd(
     )
 
     try:
-        # Huawei/Realtek: X_CT-COM_* -> nombres del fabricante
+        # Huawei/Realtek/X_CATV: X_CT-COM_* -> nombres del fabricante
         from app.services.wan_driver import detect_wan_driver as _drv
-        if _drv(device) in ("huawei", "realtek"):
-            from app.services.vendor_wan import translate
-            values = translate(values, _drv(device))
+        if _drv(device) in ("huawei", "realtek", "x_catv_wan"):
+            from app.services.vendor_wan import translate, vendor_of
+            values = translate(values, vendor_of(_drv(device)))
 
 
         await genieacs.set_parameter_values(
@@ -1911,7 +1958,7 @@ async def edit_pppoe_wan_wcd(
 
         confirmed = False
 
-        for _ in range(5):
+        for _ in range(confirm_tries(device)):
             await asyncio.sleep(2)
 
             current = await genieacs.get_device(device_id)
@@ -2053,7 +2100,7 @@ async def toggle_ip_wan_wcd(
 
         confirmed = False
 
-        for _ in range(5):
+        for _ in range(confirm_tries(device)):
             await asyncio.sleep(2)
 
             current = await genieacs.get_device(device_id)
@@ -2273,11 +2320,11 @@ async def edit_ip_wan_wcd(
     )
 
     try:
-        # Huawei/Realtek: X_CT-COM_* -> nombres del fabricante
+        # Huawei/Realtek/X_CATV: X_CT-COM_* -> nombres del fabricante
         from app.services.wan_driver import detect_wan_driver as _drv
-        if _drv(device) in ("huawei", "realtek"):
-            from app.services.vendor_wan import translate
-            values = translate(values, _drv(device))
+        if _drv(device) in ("huawei", "realtek", "x_catv_wan"):
+            from app.services.vendor_wan import translate, vendor_of
+            values = translate(values, vendor_of(_drv(device)))
 
         await genieacs.set_parameter_values(
             device_id,
@@ -2286,7 +2333,7 @@ async def edit_ip_wan_wcd(
 
         confirmed = False
 
-        for _ in range(5):
+        for _ in range(confirm_tries(device)):
             await asyncio.sleep(2)
 
             current = await genieacs.get_device(device_id)

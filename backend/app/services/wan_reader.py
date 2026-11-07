@@ -266,6 +266,16 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
     }
 
 
+def has_values(obj):
+    """True si al menos un parametro directo de la conexion trae valor."""
+
+    return any(
+        isinstance(v, dict) and "_value" in v
+        for k, v in obj.items()
+        if not str(k).startswith("_")
+    )
+
+
 def read_wan(device):
 
     igd = device.get(
@@ -295,6 +305,14 @@ def read_wan(device):
             container = wcd.get(kind, {})
 
             for instance, obj in children(container):
+
+                # X_CATV: tras borrar un WCD la ONU sigue listando sus
+                # parametros sin valores. Esa conexion "fantasma" no existe.
+                if (
+                    isinstance(wcd.get("X_CATV_WANGponLinkConfig"), dict)
+                    and not has_values(obj)
+                ):
+                    continue
 
                 result.append(
                     read_connection(

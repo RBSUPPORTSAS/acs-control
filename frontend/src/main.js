@@ -1528,7 +1528,7 @@ function catvState(value) {
             }
 
             wanCreating.value = true
-            wanMessage.value = ''
+            wanMessage.value = 'Creando WAN… algunas ONU tardan hasta 2 minutos en confirmar.'
 
             try {
 
