@@ -6151,6 +6151,15 @@ function formatDate(value) {
                                             </strong>
                                         </div>
 
+                                        <div
+                                            v-for="metric in (catv.metrics || [])"
+                                            :key="metric.label"
+                                            class="info-box"
+                                        >
+                                            <span>{{ metric.label }}</span>
+                                            <strong>{{ metric.value }}</strong>
+                                        </div>
+
                                     </div>
 
                                     <div class="catv-control-box">
@@ -6194,7 +6203,7 @@ function formatDate(value) {
 
                                         <small>
                                             GenieACS escribirá directamente
-                                            Catv.Enable = 1 o 0.
+                                            {{ (catv.parameter || 'Catv.Enable').split('.').slice(-2).join('.') }}.
                                         </small>
 
                                     </div>
@@ -6751,9 +6760,18 @@ function formatDate(value) {
                                     class="warning-box"
                                 >
 
-                                    Esta ONU no expone
-                                    controles de seguridad
-                                    compatibles.
+                                    {{
+                                        securityData && securityData.reason
+                                            ? securityData.reason
+                                            : 'Esta ONU no expone controles de seguridad compatibles.'
+                                    }}
+
+                                    <div
+                                        v-for="note in ((securityData && securityData.notes) || [])"
+                                        :key="note.label"
+                                    >
+                                        <b>{{ note.label }}:</b> {{ note.value }}
+                                    </div>
 
                                 </div>
 

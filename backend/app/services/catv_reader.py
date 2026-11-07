@@ -18,7 +18,43 @@ CATV_PROFILES = (
         "on_value": 1,
         "off_value": 0,
     },
+    {
+        # Realtek / OPTICTIMES (RT9607C, IGD, RX8102WT).
+        # Validado en RT9607C 4F50544939D5027D.
+        "driver": "x_rz_catv",
+        "parameter": "InternetGatewayDevice.X_RZ_Catv.RF_Enable",
+        "support_parameter": None,
+        "value_type": "xsd:boolean",
+        "on_value": True,
+        "off_value": False,
+    },
 )
+
+# Mediciones de solo lectura que se muestran junto al estado.
+CATV_METRICS = (
+    ("InternetGatewayDevice.X_RZ_Catv.PhyStatus", "Señal óptica RF"),
+    ("InternetGatewayDevice.X_RZ_Catv.InputPower", "Potencia de entrada"),
+    ("InternetGatewayDevice.X_RZ_Catv.OutputLevel", "Nivel de salida RF"),
+    ("InternetGatewayDevice.X_RZ_Catv.AGCLow", "AGC mínimo"),
+    ("InternetGatewayDevice.X_RZ_Catv.AGCHigh", "AGC máximo"),
+)
+
+
+def catv_metrics(device):
+    out = []
+
+    for path, label in CATV_METRICS:
+        value = get_parameter(device, path)
+
+        if value is None:
+            continue
+
+        if isinstance(value, bool):
+            value = "Presente" if value else "Sin señal"
+
+        out.append({"label": label, "value": str(value)})
+
+    return out
 
 
 def _get_node(device, path):
@@ -101,4 +137,6 @@ def read_catv(device):
         "enabled": profile["enabled"],
         "writable": profile["writable"],
         "driver": profile["driver"],
+        "parameter": profile["parameter"],
+        "metrics": catv_metrics(device),
     }

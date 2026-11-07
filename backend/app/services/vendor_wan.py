@@ -254,6 +254,15 @@ async def create_vendor_wan(client, device_id, data, mode="DHCP", vendor="huawei
         wait_ms=10000,
     )
 
+    # RT9607C: el 802.1p va en Layer2Bridging.Marking (no hay X_RZ_802-1pMark).
+    if vendor == "realtek":
+        from app.services import l2_marking
+
+        priority = int(data.get("priority", 0) or 0)
+
+        if priority and l2_marking.uses_marking(await client.get_device(device_id)):
+            await l2_marking.apply(client, device_id, wcd, vlan=int(data["vlan"]), priority=priority)
+
     return {
         "status": 200,
         "driver": vendor,
