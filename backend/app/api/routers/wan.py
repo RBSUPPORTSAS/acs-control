@@ -145,6 +145,11 @@ async def create_pppoe_wan(
             detail="ONU no encontrada"
         )
 
+    from app.services.wan_driver import REALTEK_CREATE_MSG, realtek_wan
+
+    if realtek_wan(device):
+        raise HTTPException(400, REALTEK_CREATE_MSG)
+
     vlan = int(payload.get("vlan", 0))
 
     if vlan < 1 or vlan > 4094:
@@ -624,6 +629,19 @@ async def edit_pppoe_wan(
             "WAN protegida: contiene TR069"
         )
 
+    from app.services.wan_driver import REALTEK_VLAN_MSG, realtek_wan
+
+    if realtek_wan(device) and (
+        ("vlan" in payload and str(payload["vlan"]) != str(wan.get("vlan")))
+        or ("priority" in payload and str(payload["priority"]) != str(wan.get("priority_8021p")))
+        or (
+            "bindings" in payload
+            and set(payload.get("bindings") or [])
+            != set(filter(None, str(wan.get("lan_binding") or "").split(",")))
+        )
+    ):
+        raise HTTPException(400, REALTEK_VLAN_MSG)
+
     base = (
         "InternetGatewayDevice."
         "WANDevice.1."
@@ -903,6 +921,11 @@ async def create_dhcp_wan(
     if not device:
         raise HTTPException(404, "ONU no encontrada")
 
+    from app.services.wan_driver import REALTEK_CREATE_MSG, realtek_wan
+
+    if realtek_wan(device):
+        raise HTTPException(400, REALTEK_CREATE_MSG)
+
     vlan = int(payload.get("vlan", 0))
     priority = int(payload.get("priority", 0))
     mtu = int(payload.get("mtu", 1500))
@@ -1111,6 +1134,11 @@ async def create_vsol_ip_wan(
     if not device:
         raise HTTPException(404, "ONU no encontrada")
 
+    from app.services.wan_driver import REALTEK_CREATE_MSG, realtek_wan
+
+    if realtek_wan(device):
+        raise HTTPException(400, REALTEK_CREATE_MSG)
+
     from app.services.wan_driver import HUAWEI_CREATE_MSG, huawei_wan
 
     if huawei_wan(device):
@@ -1279,6 +1307,11 @@ async def create_vsol_pppoe_wan(
 
     if not device:
         raise HTTPException(404, "ONU no encontrada")
+
+    from app.services.wan_driver import REALTEK_CREATE_MSG, realtek_wan
+
+    if realtek_wan(device):
+        raise HTTPException(400, REALTEK_CREATE_MSG)
 
     from app.services.wan_driver import HUAWEI_CREATE_MSG, huawei_wan
 
@@ -1723,6 +1756,19 @@ async def edit_pppoe_wan_wcd(
             "WAN protegida: contiene TR069"
         )
 
+    from app.services.wan_driver import REALTEK_VLAN_MSG, realtek_wan
+
+    if realtek_wan(device) and (
+        ("vlan" in payload and str(payload["vlan"]) != str(wan.get("vlan")))
+        or ("priority" in payload and str(payload["priority"]) != str(wan.get("priority_8021p")))
+        or (
+            "bindings" in payload
+            and set(payload.get("bindings") or [])
+            != set(filter(None, str(wan.get("lan_binding") or "").split(",")))
+        )
+    ):
+        raise HTTPException(400, REALTEK_VLAN_MSG)
+
     base = (
         "InternetGatewayDevice."
         "WANDevice.1."
@@ -2122,6 +2168,19 @@ async def edit_ip_wan_wcd(
 
     if wan.get("protected"):
         raise HTTPException(403, "WAN protegida: contiene TR069")
+
+    from app.services.wan_driver import REALTEK_VLAN_MSG, realtek_wan
+
+    if realtek_wan(device) and (
+        ("vlan" in payload and str(payload["vlan"]) != str(wan.get("vlan")))
+        or ("priority" in payload and str(payload["priority"]) != str(wan.get("priority_8021p")))
+        or (
+            "bindings" in payload
+            and set(payload.get("bindings") or [])
+            != set(filter(None, str(wan.get("lan_binding") or "").split(",")))
+        )
+    ):
+        raise HTTPException(400, REALTEK_VLAN_MSG)
 
     mode = str(
         wan.get("addressing_type") or "DHCP"

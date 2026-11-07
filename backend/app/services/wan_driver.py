@@ -85,3 +85,30 @@ def huawei_wan(device):
 
 
 HUAWEI_CREATE_MSG = "En ONUs Huawei usa la creación estándar de WAN"
+
+
+def realtek_wan(device):
+    """True si las WAN usan el modelo Realtek (X_RTK_VlanId), p. ej. IGD,
+    RT9607C, RX8102WT. La VLAN va en X_RTK_VlanId y la prioridad en
+    X_RZ_802-1pMark. Crear WAN y cambiar VLAN/prioridad aun no estan
+    validados: los editores escriben X_CT-COM_*, que GenieACS omitiria sin
+    error."""
+
+    try:
+        wcds = device["InternetGatewayDevice"]["WANDevice"]["1"]["WANConnectionDevice"]
+    except Exception:
+        return False
+
+    for index, wcd in (wcds or {}).items():
+        if not str(index).isdigit() or not isinstance(wcd, dict):
+            continue
+        for kind in ("WANIPConnection", "WANPPPConnection"):
+            for inst, conn in (wcd.get(kind) or {}).items():
+                if str(inst).isdigit() and isinstance(conn, dict) and "X_RTK_VlanId" in conn:
+                    return True
+
+    return False
+
+
+REALTEK_CREATE_MSG = "Crear WAN aún no está validado en este modelo de ONU"
+REALTEK_VLAN_MSG = "Cambiar VLAN, prioridad o interfaces aún no está validado en este modelo de ONU"

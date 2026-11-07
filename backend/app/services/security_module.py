@@ -128,6 +128,94 @@ HUAWEI_WRITE = {
 }
 
 
+# Realtek/OPTICTIMES (IGD): Firewall.X_RZ_ServiceControl.IPV4ServiceControl.{i}
+# es una regla por origen (Ingress WAN o LAN) con Service_HTTP, _HTTPS,
+# _SSH, _TELNET, _FTP, _TFTP, _ICMP y sus _PORT. El nivel esta en
+# Firewall.X_RZ_Firewall_Level (texto, como Huawei).
+RZ_FIREWALL = "InternetGatewayDevice.Firewall"
+RZ_LEVEL_PATH = RZ_FIREWALL + ".X_RZ_Firewall_Level"
+RZ_SERVICES = ("HTTP", "HTTPS", "SSH", "TELNET", "FTP", "TFTP", "ICMP")
+
+
+def rz_rules(device):
+    """{"WAN": (ruta, nodo), "LAN": (ruta, nodo)} de X_RZ_ServiceControl."""
+
+    try:
+        table = (
+            device["InternetGatewayDevice"]["Firewall"]
+            ["X_RZ_ServiceControl"]["IPV4ServiceControl"]
+        )
+    except Exception:
+        return {}
+
+    rules = {}
+
+    for index, node in (table or {}).items():
+        if not str(index).isdigit() or not isinstance(node, dict):
+            continue
+
+        ingress = str(unwrap(node.get("Ingress")) or "").upper()
+
+        if ingress in ("WAN", "LAN") and ingress not in rules:
+            rules[ingress] = (
+                f"{RZ_FIREWALL}.X_RZ_ServiceControl.IPV4ServiceControl.{index}.",
+                node,
+            )
+
+    return rules
+
+
+def access_table(device):
+    """Servicios por WAN/LAN con los nombres de AclServices.
+
+    Devuelve (nodos, rutas): nodos[nombre] es el nodo de GenieACS y
+    rutas[nombre] la ruta completa para escribirlo. Para Huawei/VSOL son
+    los de X_HW_Security.AclServices; para Realtek se arman desde las
+    reglas X_RZ_ServiceControl.
+    """
+
+    acl = get_acl(device)
+
+    if acl:
+        names = [k for k in acl if not k.startswith("_")]
+        return acl, {name: BASE + name for name in names}
+
+    rules = rz_rules(device)
+
+    if not rules:
+        return None, {}
+
+    nodes, paths = {}, {}
+
+    for ingress, (prefix, node) in rules.items():
+        side = "Wan" if ingress == "WAN" else "Lan"
+        allow_any = to_bool(node.get("Service_Any"))
+
+        for svc in RZ_SERVICES:
+            flag = node.get(f"Service_{svc}")
+
+            if not isinstance(flag, dict):
+                continue
+
+            name = f"{svc}{side}Enable"
+
+            if allow_any:
+                # "Cualquier servicio" ya permitido: el servicio esta abierto
+                # aunque su casilla individual diga False. No se edita aqui.
+                nodes[name] = {"_value": True, "_writable": False}
+            else:
+                nodes[name] = flag
+                paths[name] = prefix + f"Service_{svc}"
+
+            port = node.get(f"Service_{svc}_PORT")
+
+            if side == "Wan" and isinstance(port, dict):
+                nodes[f"{svc}WanPort"] = port
+                paths[f"{svc}WanPort"] = prefix + f"Service_{svc}_PORT"
+
+    return nodes, paths
+
+
 def firewall_source(device):
     """("grade", nodo) para VSOL, ("huawei", nodo) para Huawei o (None, None)."""
 
@@ -144,6 +232,14 @@ def firewall_source(device):
     if isinstance(node, dict):
         return "huawei", node
 
+    try:
+        node = device["InternetGatewayDevice"]["Firewall"]["X_RZ_Firewall_Level"]
+    except Exception:
+        node = None
+
+    if isinstance(node, dict):
+        return "rz", node
+
     return None, None
 
 
@@ -153,7 +249,7 @@ def firewall_grade(device):
     if kind == "grade":
         return to_int(node)
 
-    if kind == "huawei":
+    if kind in ("huawei", "rz"):
         return HUAWEI_LEVELS.get(str(unwrap(node) or "").strip().lower())
 
     return None
@@ -190,11 +286,14 @@ def firewall_write(device, grade):
     if kind == "huawei":
         return HUAWEI_LEVEL_PATH, HUAWEI_WRITE[grade], "xsd:string"
 
+    if kind == "rz":
+        return RZ_LEVEL_PATH, HUAWEI_WRITE[grade], "xsd:string"
+
     return None
 
 
 def security_state(device):
-    acl = get_acl(device)
+    acl, _paths = access_table(device)
 
     if not acl:
         return {
@@ -279,7 +378,7 @@ def security_state(device):
         # formato numerico (VSOL) otros valores siguen como "Desconocido".
         "firewall_label": (
             firewall_label(grade)
-            if firewall_source(device)[0] == "huawei" or grade in (0, 1)
+            if firewall_source(device)[0] in ("huawei", "rz") or grade in (0, 1)
             else f"Desconocido ({grade})"
         ),
 
@@ -307,11 +406,11 @@ def service_changes(
             "Servicio no soportado"
         )
 
-    acl = get_acl(device)
+    acl, paths = access_table(device)
 
     if not acl:
         raise ValueError(
-            "La ONU no expone AclServices"
+            "La ONU no expone sus servicios de acceso"
         )
 
     cfg = SERVICES[service_id]
@@ -343,7 +442,7 @@ def service_changes(
             )
 
         values.append([
-            BASE + cfg["wan"],
+            paths.get(cfg["wan"], BASE + cfg["wan"]),
             enabled,
             "xsd:boolean"
         ])
@@ -364,7 +463,7 @@ def service_changes(
             )
 
         values.append([
-            BASE + cfg["lan"],
+            paths.get(cfg["lan"], BASE + cfg["lan"]),
             enabled,
             "xsd:boolean"
         ])
@@ -392,7 +491,7 @@ def service_changes(
             )
 
         values.append([
-            BASE + cfg["port"],
+            paths.get(cfg["port"], BASE + cfg["port"]),
             port,
             "xsd:unsignedInt"
         ])
@@ -424,7 +523,7 @@ def service_changes(
                 )
 
         values.append([
-            BASE + cfg["ip"],
+            paths.get(cfg["ip"], BASE + cfg["ip"]),
             ip,
             "xsd:string"
         ])
