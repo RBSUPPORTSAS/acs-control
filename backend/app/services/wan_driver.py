@@ -24,6 +24,10 @@ def detect_wan_driver(device):
     if realtek_wan(device):
         return "realtek"
 
+    # 0c. X_CMCC (RX8414CDW, ZC-500W): VLAN/802.1p en X_CMCC_* de la conexion.
+    if cmcc_wan(device):
+        return "cmcc"
+
     # 1. Arquitectura X_CATV
     # VLAN/802.1p viven en X_CATV_WANGponLinkConfig.
     for index, wcd in wcds.items():
@@ -114,6 +118,29 @@ def realtek_wan(device):
 
 
 REALTEK_CREATE_MSG = "En esta ONU usa la creación estándar de WAN"
+
+# Drivers cuyas WAN se crean y editan con app.services.vendor_wan.
+VENDOR_DRIVERS = ("huawei", "realtek", "cmcc")
+
+
+def cmcc_wan(device):
+    """True si las WAN usan X_CMCC_VLANIDMark (estandar China Mobile),
+    p. ej. RX8414CDW (fw V02.01.02, chip ZTE) o ZC-500W."""
+
+    try:
+        wcds = device["InternetGatewayDevice"]["WANDevice"]["1"]["WANConnectionDevice"]
+    except Exception:
+        return False
+
+    for index, wcd in (wcds or {}).items():
+        if not str(index).isdigit() or not isinstance(wcd, dict):
+            continue
+        for kind in ("WANIPConnection", "WANPPPConnection"):
+            for inst, conn in (wcd.get(kind) or {}).items():
+                if str(inst).isdigit() and isinstance(conn, dict) and "X_CMCC_VLANIDMark" in conn:
+                    return True
+
+    return False
 
 
 # Nivel "No certificado" (ver decisiones-y-estado): solo SSID/clave WiFi y

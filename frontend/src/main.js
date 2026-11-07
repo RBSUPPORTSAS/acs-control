@@ -6258,6 +6258,20 @@ function formatDate(value) {
                                     "
                                 >
 
+                                    <div
+                                        v-if="(securityData.notes || []).length"
+                                        class="info-grid"
+                                    >
+                                        <div
+                                            v-for="note in securityData.notes"
+                                            :key="note.label"
+                                            class="info-box"
+                                        >
+                                            <span>{{ note.label }}</span>
+                                            <strong>{{ note.value }}</strong>
+                                        </div>
+                                    </div>
+
                                     <!-- FIREWALL -->
 
                                     <div
@@ -6330,11 +6344,11 @@ function formatDate(value) {
                                             >
 
                                                 <strong>
-                                                    Bajo
+                                                    {{ securityData.firewall_kind === 'cmcc' ? 'Apagar' : 'Bajo' }}
                                                 </strong>
 
                                                 <small>
-                                                    Nivel 0
+                                                    {{ securityData.firewall_kind === 'cmcc' ? 'Firewall apagado' : 'Nivel 0' }}
                                                 </small>
 
                                             </button>
@@ -6360,11 +6374,11 @@ function formatDate(value) {
                                             >
 
                                                 <strong>
-                                                    Alto
+                                                    {{ securityData.firewall_kind === 'cmcc' ? 'Encender' : 'Alto' }}
                                                 </strong>
 
                                                 <small>
-                                                    Nivel 1
+                                                    {{ securityData.firewall_kind === 'cmcc' ? 'Firewall encendido' : 'Nivel 1' }}
                                                 </small>
 
                                             </button>

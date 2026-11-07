@@ -7,7 +7,7 @@ afectar las WAN existentes):
 
 Los constructores existentes arman los valores con nombres X_CT-COM_*;
 aqui se traducen al formato de cada fabricante justo antes de enviarlos.
-Solo se usa cuando wan_driver detecta "huawei", "realtek" o "x_catv_wan".
+Solo se usa cuando wan_driver detecta "huawei", "realtek", "cmcc" o "x_catv_wan".
 
 X_CATV (KM1303, SML-702XW, ONT1GE1FE1TV...): la VLAN y el 802.1p viven
 solo en el WCD (X_CATV_WANGponLinkConfig); el resto cambia de prefijo
@@ -141,6 +141,22 @@ VENDORS = {
         },
         "interfaces": rtk_lan_interface,
     },
+    # X_CMCC (RX8414CDW fw V02.01.02, ZC-500W): mismos nombres que X_CT-COM
+    # con otro prefijo; VLAN en la conexion (sin WANGponLinkConfig).
+    # X_CMCC_VLANMode 2 = etiquetar con la VLAN (asi estan las WAN de fabrica).
+    "cmcc": {
+        "rename": {
+            "X_CT-COM_VLANIDMark": ("X_CMCC_VLANIDMark", "xsd:int"),
+            "X_CT-COM_802-1pMark": ("X_CMCC_802-1pMark", "xsd:int"),
+            "X_CT-COM_ServiceList": ("X_CMCC_ServiceList", "xsd:string"),
+            "X_CT-COM_IPMode": ("X_CMCC_IPMode", "xsd:int"),
+            "X_CT-COM_VLANMode": ("X_CMCC_VLANMode", "xsd:int"),
+        },
+        "force": {"X_CMCC_VLANMode": 2},
+        "interfaces": lambda conn_base, value: [
+            [f"{conn_base}.X_CMCC_LanInterface", value, "xsd:string"]
+        ],
+    },
     # RX8102WT (fw V1.9.2.0-220715): 802.1p en VlanPriMark de la conexion.
     "realtek_vpm": {
         "rename": {
@@ -207,6 +223,7 @@ def translate(values, vendor="huawei"):
 
         if name in spec.get("rename", {}):
             new_name, new_type = spec["rename"][name]
+            value = spec.get("force", {}).get(new_name, value)
             out.append([f"{conn_base}.{new_name}", value, new_type])
             continue
 
@@ -224,6 +241,50 @@ def translate(values, vendor="huawei"):
         out.append([path, value, value_type])
 
     return out
+
+
+def _connections(device, wcd, container):
+    node = (
+        (device or {}).get("InternetGatewayDevice", {})
+        .get("WANDevice", {}).get("1", {}).get("WANConnectionDevice", {})
+        .get(str(wcd), {}).get(container) or {}
+    )
+    return {int(k) for k, v in node.items() if str(k).isdigit() and isinstance(v, dict)}
+
+
+async def _add_connection_in_wcd(client, device_id, device, container):
+    """Agrega la conexion en el primer WCD existente y devuelve (wcd, instancia)."""
+
+    numbers = sorted(wcd_numbers(device))
+
+    if not numbers:
+        raise RuntimeError("La ONU no tiene WANConnectionDevice donde crear la WAN")
+
+    wcd = numbers[0]
+    before = _connections(device, wcd, container)
+    path = f"{base_wcd(wcd)}.{container}"
+
+    # La ONU tarda ~40 s en sesion: encolar addObject + refresh y esperar.
+    await client.post_task(device_id, {"name": "addObject", "objectName": path})
+    await client.post_task(
+        device_id,
+        {"name": "refreshObject", "objectName": path},
+        connection_request=True,
+        wait_ms=60000,
+    )
+
+    import asyncio
+
+    for _ in range(20):
+        current = await client.get_device(device_id)
+        new = _connections(current, wcd, container) - before
+
+        if new:
+            return wcd, min(new)
+
+        await asyncio.sleep(2)
+
+    return wcd, None
 
 
 async def create_vendor_wan(client, device_id, data, mode="DHCP", vendor="huawei"):
@@ -252,31 +313,38 @@ async def create_vendor_wan(client, device_id, data, mode="DHCP", vendor="huawei
     previous = wcd_numbers(device)
     key = vendor_for(device, vendor)
 
-    await client.add_object(
-        device_id,
-        "InternetGatewayDevice.WANDevice.1.WANConnectionDevice",
-    )
+    if vendor == "cmcc":
+        # RX8414CDW: addObject de WANConnectionDevice da cwmp.9002; todas
+        # las WAN (tambien la TR-069) son conexiones del mismo WCD.
+        wcd, instance = await _add_connection_in_wcd(client, device_id, device, container)
+    else:
+        await client.add_object(
+            device_id,
+            "InternetGatewayDevice.WANDevice.1.WANConnectionDevice",
+        )
 
-    wcd = await wait_new_wcd(client, device_id, previous)
+        wcd = await wait_new_wcd(client, device_id, previous)
 
-    if wcd is None:
-        raise RuntimeError("La ONU no confirmó el nuevo WANConnectionDevice")
+        if wcd is None:
+            raise RuntimeError("La ONU no confirmó el nuevo WANConnectionDevice")
 
-    await client.add_object(device_id, f"{base_wcd(wcd)}.{container}")
+        await client.add_object(device_id, f"{base_wcd(wcd)}.{container}")
 
-    instance = await wait_new_connection(client, device_id, wcd, container, set())
+        instance = await wait_new_connection(client, device_id, wcd, container, set())
 
     if instance is None:
         raise RuntimeError(f"La ONU no confirmó {container}")
 
     # Huawei la crea encendida en VLAN 1; Realtek apagada, en bridge y VLAN 0.
     # Se lee para que GenieACS conozca sus parametros y se configura.
-    await client.post_task(
-        device_id,
-        {"name": "refreshObject", "objectName": f"{base_wcd(wcd)}.{container}.{instance}"},
-        connection_request=True,
-        wait_ms=10000,
-    )
+    # (X_CMCC ya la leyo al crearla: se ahorra una sesion de ~40 s.)
+    if vendor != "cmcc":
+        await client.post_task(
+            device_id,
+            {"name": "refreshObject", "objectName": f"{base_wcd(wcd)}.{container}.{instance}"},
+            connection_request=True,
+            wait_ms=10000,
+        )
 
     config = build(wcd, instance)
 
@@ -289,7 +357,7 @@ async def create_vendor_wan(client, device_id, data, mode="DHCP", vendor="huawei
         device_id,
         {"name": "refreshObject", "objectName": f"{base_wcd(wcd)}.{container}.{instance}"},
         connection_request=True,
-        wait_ms=10000,
+        wait_ms=60000 if vendor == "cmcc" else 10000,
     )
 
     # RT9607C: el 802.1p va en Layer2Bridging.Marking (no hay X_RZ_802-1pMark).

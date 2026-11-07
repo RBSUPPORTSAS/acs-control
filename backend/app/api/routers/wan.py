@@ -21,7 +21,8 @@ def confirm_tries(device):
 
     from app.services.wan_driver import detect_wan_driver
 
-    return 25 if detect_wan_driver(device) == "x_catv_wan" else 5
+    # X_CMCC (RX8414CDW) tambien tarda ~40 s.
+    return 25 if detect_wan_driver(device) in ("x_catv_wan", "cmcc") else 5
 
 
 # ACS_WAN_READ_11A
@@ -188,7 +189,7 @@ async def create_pppoe_wan(
         after={
             "vlan": vlan,
             "service": "INTERNET",
-            "enabled": detect_wan_driver(device) in ("x_ctcom_wan", "huawei", "realtek", "x_catv_wan"),
+            "enabled": detect_wan_driver(device) in ("x_ctcom_wan", "huawei", "realtek", "cmcc", "x_catv_wan"),
         },
         result="SOLICITADO",
         message="Creando nueva WAN PPPoE",
@@ -212,7 +213,7 @@ async def create_pppoe_wan(
                 payload,
             )
 
-        elif driver in ("huawei", "realtek"):
+        elif driver in ("huawei", "realtek", "cmcc"):
             from app.services.vendor_wan import create_vendor_wan
 
             result = await create_vendor_wan(
@@ -805,7 +806,7 @@ async def edit_pppoe_wan(
     try:
         # Huawei/Realtek/X_CATV: X_CT-COM_* -> nombres del fabricante
         from app.services.wan_driver import detect_wan_driver as _drv
-        if _drv(device) in ("huawei", "realtek", "x_catv_wan"):
+        if _drv(device) in ("huawei", "realtek", "cmcc", "x_catv_wan"):
             from app.services.vendor_wan import translate, vendor_for
             values = translate(values, vendor_for(device, _drv(device)))
 
@@ -965,7 +966,7 @@ async def create_dhcp_wan(
     if mode == "STATIC":
         import ipaddress
 
-        if driver not in ("x_ctcom_wan", "huawei", "realtek", "x_catv_wan"):
+        if driver not in ("x_ctcom_wan", "huawei", "realtek", "cmcc", "x_catv_wan"):
             raise HTTPException(
                 400,
                 "IP fija no está validada para este modelo de ONU",
@@ -989,7 +990,7 @@ async def create_dhcp_wan(
         "vlan": vlan,
         "service": "INTERNET",
         "type": label,
-        "enabled": driver in ("x_ctcom_wan", "huawei", "realtek", "x_catv_wan"),
+        "enabled": driver in ("x_ctcom_wan", "huawei", "realtek", "cmcc", "x_catv_wan"),
     }
 
     if mode == "STATIC":
@@ -1028,7 +1029,7 @@ async def create_dhcp_wan(
                 mode=mode,
             )
 
-        elif driver in ("huawei", "realtek"):
+        elif driver in ("huawei", "realtek", "cmcc"):
             from app.services.vendor_wan import create_vendor_wan
 
             result = await create_vendor_wan(
@@ -1152,9 +1153,9 @@ async def create_vsol_ip_wan(
     if not device:
         raise HTTPException(404, "ONU no encontrada")
 
-    from app.services.wan_driver import REALTEK_CREATE_MSG, realtek_wan
+    from app.services.wan_driver import REALTEK_CREATE_MSG, cmcc_wan, realtek_wan
 
-    if realtek_wan(device):
+    if realtek_wan(device) or cmcc_wan(device):
         raise HTTPException(400, REALTEK_CREATE_MSG)
 
     from app.services.wan_driver import HUAWEI_CREATE_MSG, huawei_wan
@@ -1328,9 +1329,9 @@ async def create_vsol_pppoe_wan(
     if not device:
         raise HTTPException(404, "ONU no encontrada")
 
-    from app.services.wan_driver import REALTEK_CREATE_MSG, realtek_wan
+    from app.services.wan_driver import REALTEK_CREATE_MSG, cmcc_wan, realtek_wan
 
-    if realtek_wan(device):
+    if realtek_wan(device) or cmcc_wan(device):
         raise HTTPException(400, REALTEK_CREATE_MSG)
 
     from app.services.wan_driver import HUAWEI_CREATE_MSG, huawei_wan
@@ -1642,10 +1643,19 @@ async def delete_wan_wcd(
         if w.get("wan_connection_device") == wcd
     ]
 
+    from app.services.wan_driver import detect_wan_driver as _drv_del
+
+    # X_CMCC (RX8414CDW): todas las WAN comparten el WCD con la TR-069; se
+    # borra solo la conexion pedida, nunca el WCD.
+    only_connection = _drv_del(device) == "cmcc"
+
+    if only_connection and target.get("protected"):
+        raise HTTPException(403, "WAN protegida: transporta TR069")
+
     # Seguridad crítica:
     # si cualquier conexión del WCD transporta TR069,
     # jamás eliminamos el contenedor.
-    if any(w.get("protected") for w in same_wcd):
+    if not only_connection and any(w.get("protected") for w in same_wcd):
         raise HTTPException(
             403,
             "WAN protegida: el WANConnectionDevice contiene TR069"
@@ -1675,6 +1685,9 @@ async def delete_wan_wcd(
         "WANDevice.1."
         f"WANConnectionDevice.{wcd}"
     )
+
+    if only_connection:
+        object_name += f".{object_type}.{instance}"
 
     from app.services.wan_driver import detect_wan_driver
 
@@ -1707,6 +1720,15 @@ async def delete_wan_wcd(
                 wait_ms=SESSION_MS,
             )
 
+        elif only_connection:
+            # La ONU tarda ~40 s en abrir sesion: esperar a que termine.
+            await genieacs.post_task(
+                device_id,
+                {"name": "deleteObject", "objectName": object_name},
+                connection_request=True,
+                wait_ms=60000,
+            )
+
         else:
             await genieacs.delete_object(
                 device_id,
@@ -1729,6 +1751,13 @@ async def delete_wan_wcd(
 
                 exists = any(
                     w.get("wan_connection_device") == wcd
+                    and (
+                        not only_connection
+                        or (
+                            w.get("object_type") == object_type
+                            and w.get("instance") == instance
+                        )
+                    )
                     for w in current_wans
                 )
 
@@ -1990,7 +2019,7 @@ async def edit_pppoe_wan_wcd(
     try:
         # Huawei/Realtek/X_CATV: X_CT-COM_* -> nombres del fabricante
         from app.services.wan_driver import detect_wan_driver as _drv
-        if _drv(device) in ("huawei", "realtek", "x_catv_wan"):
+        if _drv(device) in ("huawei", "realtek", "cmcc", "x_catv_wan"):
             from app.services.vendor_wan import translate, vendor_for
             values = translate(values, vendor_for(device, _drv(device)))
 
@@ -2258,6 +2287,13 @@ async def edit_ip_wan_wcd(
 
         name = f"{wcd}_INTERNET_R_VID_{vlan}"
 
+        # X_CMCC: todas las WAN viven en el WCD 1; el nombre de fabrica
+        # usa el numero de conexion ("2_TR069_R_VID_46").
+        from app.services.wan_driver import detect_wan_driver as _drv_name
+
+        if _drv_name(device) == "cmcc":
+            name = f"{instance}_INTERNET_R_VID_{vlan}"
+
         values += [
             [base + "X_CT-COM_VLANIDMark",
              vlan, "xsd:unsignedInt"],
@@ -2382,7 +2418,7 @@ async def edit_ip_wan_wcd(
     try:
         # Huawei/Realtek/X_CATV: X_CT-COM_* -> nombres del fabricante
         from app.services.wan_driver import detect_wan_driver as _drv
-        if _drv(device) in ("huawei", "realtek", "x_catv_wan"):
+        if _drv(device) in ("huawei", "realtek", "cmcc", "x_catv_wan"):
             from app.services.vendor_wan import translate, vendor_for
             values = translate(values, vendor_for(device, _drv(device)))
 
