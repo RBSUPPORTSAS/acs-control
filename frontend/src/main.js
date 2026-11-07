@@ -39,6 +39,9 @@ createApp({
 
         // Lectura de datos de la ONU bajo demanda (refreshObject, solo lectura)
         const dataStatus = ref(null)
+        const certification = ref(null)
+        // Modelo no certificado: solo se muestran datos, sin gestión.
+        const readOnly = computed(() => certification.value?.certified === false)
         // '' | 'reading' | 'updating' | 'waiting' | 'done' | 'error'
         const refreshState = ref('')
         const refreshMessage = ref('')
@@ -888,6 +891,7 @@ async function loadHealth() {
 
             stopRefresh()
             dataStatus.value = null
+            certification.value = null
             detailLoading.value = true
             activeTab.value = 'resumen'
 
@@ -914,6 +918,7 @@ async function loadHealth() {
                         data.device || device
 
                     dataStatus.value = data.data_status || null
+                    certification.value = data.certification || null
                 }
 
             } catch (e) {
@@ -997,6 +1002,7 @@ async function loadHealth() {
             const data = await r.json()
             selectedDevice.value = data.device || selectedDevice.value
             dataStatus.value = data.data_status || null
+            certification.value = data.certification || null
 
             // La pestaña abierta se recarga sola si antes no tenía datos y no hay
             // un formulario en uso; si no, se ofrece recargarla para no borrar
@@ -3277,6 +3283,8 @@ function formatDate(value) {
             openDevice,
             closeDevice,
             dataStatus,
+            certification,
+            readOnly,
             refreshState,
             refreshMessage,
             refreshNewData,
@@ -3508,7 +3516,7 @@ function formatDate(value) {
             <!-- PRINCIPAL                                  -->
             <!-- ========================================= -->
 
-            <main class="main">
+            <main class="main" :class="{ 'read-only': readOnly }">
 
                 <header class="topbar">
 
@@ -5379,6 +5387,13 @@ function formatDate(value) {
 
                     </div>
 
+
+                    <div
+                        v-if="readOnly"
+                        class="uncertified-banner"
+                    >
+                        ⚠ {{ certification.message }}
+                    </div>
 
                     <div
                         v-if="refreshState"

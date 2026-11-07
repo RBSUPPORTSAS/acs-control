@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.services.genieacs import genieacs
 from app.services.device_normalizer import normalize_device
+from app.api.certified import ensure_certified
 
 
 router = APIRouter()
@@ -21,6 +22,7 @@ def confirm_tries(device):
     from app.services.wan_driver import detect_wan_driver
 
     return 25 if detect_wan_driver(device) == "x_catv_wan" else 5
+
 
 # ACS_WAN_READ_11A
 @router.get("/api/devices/{device_id}/wan")
@@ -42,10 +44,13 @@ async def device_wan(device_id: str):
 
     wan = enrich_wan_bindings(device, wan)
 
+    from app.services.wan_driver import certification
+
     return {
         "device": normalize_device(device),
         "count": len(wan),
         "wan": wan,
+        "certification": certification(device),
         "mode": "read-only"
     }
 
@@ -147,6 +152,8 @@ async def create_pppoe_wan(
     )
 
     device = await genieacs.get_device(device_id)
+
+    ensure_certified(device)
 
     if not device:
         raise HTTPException(
@@ -323,6 +330,8 @@ async def delete_pppoe_wan(
 
     device = await genieacs.get_device(device_id)
 
+    ensure_certified(device)
+
     if not device:
         raise HTTPException(404, "ONU no encontrada")
 
@@ -448,6 +457,8 @@ async def toggle_pppoe_wan(
         )
 
     device = await genieacs.get_device(device_id)
+
+    ensure_certified(device)
 
     if not device:
         raise HTTPException(404, "ONU no encontrada")
@@ -615,6 +626,8 @@ async def edit_pppoe_wan(
     from app.services.audit_service import add_audit, update_audit
 
     device = await genieacs.get_device(device_id)
+
+    ensure_certified(device)
 
     if not device:
         raise HTTPException(404, "ONU no encontrada")
@@ -910,6 +923,8 @@ async def create_dhcp_wan(
 
     device = await genieacs.get_device(device_id)
 
+    ensure_certified(device)
+
     if not device:
         raise HTTPException(404, "ONU no encontrada")
 
@@ -1120,6 +1135,8 @@ async def create_vsol_ip_wan(
 
     device = await genieacs.get_device(device_id)
 
+    ensure_certified(device)
+
     if not device:
         raise HTTPException(404, "ONU no encontrada")
 
@@ -1294,6 +1311,8 @@ async def create_vsol_pppoe_wan(
 
     device = await genieacs.get_device(device_id)
 
+    ensure_certified(device)
+
     if not device:
         raise HTTPException(404, "ONU no encontrada")
 
@@ -1432,6 +1451,8 @@ async def toggle_pppoe_wan_wcd(
         raise HTTPException(400, "Acción inválida")
 
     device = await genieacs.get_device(device_id)
+
+    ensure_certified(device)
 
     if not device:
         raise HTTPException(404, "ONU no encontrada")
@@ -1579,6 +1600,8 @@ async def delete_wan_wcd(
         )
 
     device = await genieacs.get_device(device_id)
+
+    ensure_certified(device)
 
     if not device:
         raise HTTPException(404, "ONU no encontrada")
@@ -1752,6 +1775,8 @@ async def edit_pppoe_wan_wcd(
     from app.services.audit_service import add_audit, update_audit
 
     device = await genieacs.get_device(device_id)
+
+    ensure_certified(device)
 
     if not device:
         raise HTTPException(404, "ONU no encontrada")
@@ -2039,6 +2064,8 @@ async def toggle_ip_wan_wcd(
         raise HTTPException(400, "Acción inválida")
 
     device = await genieacs.get_device(device_id)
+
+    ensure_certified(device)
     if not device:
         raise HTTPException(404, "ONU no encontrada")
 
@@ -2153,6 +2180,8 @@ async def edit_ip_wan_wcd(
     from app.services.audit_service import add_audit, update_audit
 
     device = await genieacs.get_device(device_id)
+
+    ensure_certified(device)
 
     if not device:
         raise HTTPException(404, "ONU no encontrada")

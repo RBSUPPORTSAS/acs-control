@@ -289,31 +289,45 @@ async def test_no_borra_wan_tr069_oculta(client, km):
     assert r.status_code in (403, 404)
 
 
-async def test_endpoint_pppoe_bloqueado(client, km):
-    await login(client, "jefe")
-    r = await client.post(f"/api/devices/{ID}/wan/create-pppoe",
-                          json={"vlan": 996, "username": "u", "password": "p"})
-    assert r.status_code == 400 and "PPPoE" in r.json()["detail"]
+async def test_lectura_indica_modelo_no_certificado(client, km):
+    await login(client, "tecnico")
+    r = await client.get(f"/api/devices/{ID}/wan")
+    assert r.status_code == 200
+    cert = r.json()["certification"]
+    assert cert["certified"] is False and "no certificado" in cert["message"]
+    assert len(r.json()["wan"]) == 2
 
 
-async def test_editar_vlan_x_catv_envia_x_catv(client, km, monkeypatch):
-    import asyncio
+@pytest.mark.parametrize("method,path,body", [
+    ("post", "wan/create-dhcp", {"vlan": 999}),
+    ("post", "wan/create-ip", {"vlan": 999, "addressing_type": "STATIC"}),
+    ("post", "wan/create-pppoe", {"vlan": 996, "username": "u", "password": "p"}),
+    ("patch", "wan/1/ip/1", {"vlan": 151}),
+    ("post", "wan/1/ip/1/disable", None),
+    ("delete", "wan/1/WANIPConnection/1", None),
+    ("patch", "wifi/1", {"ssid": "x"}),
+    ("post", "catv/off", None),
+])
+async def test_escrituras_bloqueadas(client, km, monkeypatch, method, path, body):
     sent = []
 
-    async def capture(device_id, values):
-        sent.extend(values)
+    async def capture(*a, **k):
+        sent.append(a)
         return {"http_status": 200}
 
-    async def no_sleep(_):
-        return None
+    for name in ("set_parameter_values", "add_object", "delete_object", "post_task"):
+        monkeypatch.setattr(genieacs, name, capture)
 
-    monkeypatch.setattr(genieacs, "set_parameter_values", capture)
-    monkeypatch.setattr(asyncio, "sleep", no_sleep)
     await login(client, "jefe")
-    r = await client.patch(f"/api/devices/{ID}/wan/1/ip/1", json={"vlan": 151, "priority": 2, "bindings": [LAN1]})
-    assert r.status_code == 200, r.text
-    by = {p: val for p, val, _ in sent}
-    assert by[f"{WCD}.1.X_CATV_WANGponLinkConfig.VLANIDMark"] == 151
-    assert by[f"{WCD}.1.X_CATV_WANGponLinkConfig.802-1pMark"] == 2
-    assert by[f"{WCD}.1.WANIPConnection.1.X_CATV_LanInterface"] == LAN1
-    assert not [p for p in by if "X_CT-COM" in p or p.endswith(("WanName", "vsName"))]
+    kwargs = {"json": body} if body is not None else {}
+    r = await getattr(client, method)(f"/api/devices/{ID}/{path}", **kwargs)
+    assert r.status_code == 403, r.text
+    assert "no certificado" in r.json()["detail"]
+    assert sent == []
+
+
+def test_otras_marcas_siguen_certificadas():
+    from app.services.wan_driver import certification
+    from test_realtek import igd
+
+    assert certification(igd())["certified"] is True

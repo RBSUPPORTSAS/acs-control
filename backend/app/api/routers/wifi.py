@@ -10,6 +10,8 @@ from app.services.genieacs import genieacs
 from app.services.device_normalizer import normalize_device
 
 
+from app.api.certified import ensure_certified
+
 router = APIRouter()
 
 
@@ -94,6 +96,8 @@ async def edit_wifi(
     )
 
     device = await genieacs.get_device(device_id)
+
+    ensure_certified(device)
 
     if not device:
         raise HTTPException(404, "ONU no encontrada")
