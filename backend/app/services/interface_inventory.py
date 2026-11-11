@@ -1,3 +1,5 @@
+from app.services.wifi_writer import detect_band
+
 def value(obj, key):
     v = obj.get(key)
 
@@ -57,11 +59,8 @@ def inventory(device):
             "Standard"
         )
 
-        band = (
-            "5 GHz"
-            if standard and "a" in str(standard)
-            else "2.4 GHz"
-        )
+        # "b,g,n,ax" es 2.4 GHz: buscar "a" como texto lo daba por 5 GHz.
+        band = detect_band(obj)
 
         ssid = value(
             obj,

@@ -39,6 +39,9 @@ BRANCHES = {
         "X_RZ_Catv",
         "Firewall",
         "X_CMCC_Security",
+        # CDTC FD714 (GS1-R850, GS3-R851): ACL de servicios y CATV.
+        "X_CT-COM_Security",
+        "X_CMS_Services",
     ),
     "Device": (
         "DeviceInfo",
@@ -123,6 +126,7 @@ def branch_state(node):
     """Cuantos parametros tiene la rama, cuantos con valor y el mas reciente."""
 
     params = values = 0
+    unwalked = 0
     newest = None
     stack = [node]
 
@@ -137,12 +141,17 @@ def branch_state(node):
                     if ts and (newest is None or ts > newest):
                         newest = ts
             else:
+                if not child.get("_timestamp"):
+                    unwalked += 1
                 stack.append(child)
 
     return {
         # El _timestamp de un objeto indica cuando se leyeron sus nombres.
-        # Sin el, GenieACS nunca recorrio esa rama.
-        "structure": bool(node.get("_timestamp")),
+        # Sin el, GenieACS nunca recorrio esa rama. Basta un sub-objeto
+        # sin recorrer: un preset que declara rutas sueltas (p. ej. la IP
+        # de la WAN en el inform) crea la rama con solo esos valores y
+        # parece completa (CDTC FD714 en el GenieACS 10.15.50.6).
+        "structure": bool(node.get("_timestamp")) and unwalked == 0,
         "params": params,
         "values": values,
         "newest": newest,
