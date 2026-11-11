@@ -109,6 +109,17 @@ def resolve_catv_profile(device):
             "writable": _as_bool(node.get("_writable")),
         }
 
+        # DeviceInfo.Catv.Enable cambia de tipo segun el firmware: booleano
+        # en XPON+4GE fw V3.2.01-240807, texto "1"/"0" en el resto. Se
+        # escribe con el tipo que reporta la ONU.
+        if profile["driver"] == "deviceinfo_catv" and node.get("_type") == "xsd:boolean":
+            candidate.update(value_type="xsd:boolean", on_value=True, off_value=False)
+
+        # Varios firmwares (250107, 250210, 250415...) reportan "" hasta
+        # que se escribe un valor: el estado es desconocido, no "apagado".
+        if candidate["enabled"] == "":
+            candidate["enabled"] = None
+
         candidates.append(candidate)
 
     if not candidates:

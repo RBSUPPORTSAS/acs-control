@@ -32,6 +32,13 @@ BRANCHES = {
         "LANDevice",
         "X_CATV_RFDevice",
         "X_HW_Security",
+        # Gateway de la ruta por defecto (MONU xPON) y 802.1p (RT9607C).
+        "Layer3Forwarding",
+        "Layer2Bridging",
+        # CATV Realtek y seguridad Realtek IGD / X_CMCC.
+        "X_RZ_Catv",
+        "Firewall",
+        "X_CMCC_Security",
     ),
     "Device": (
         "DeviceInfo",
@@ -53,6 +60,34 @@ TASK_NAME = "refreshObject"
 
 LIGHT_KEY = "acs:refresh_light:{}"
 LIGHT_TTL = 7 * 24 * 3600
+
+# Partes que cortan la sesion aun en modo liviano (p. ej. LANDevice.1.Hosts
+# en XPON+2GE+2WIFI+USB+CATV fw V2.1.00-230825): se dejan de pedir por un
+# tiempo para que no arrastren al resto de las lecturas.
+SKIP_KEY = "acs:refresh_skip:{}"
+SKIP_TTL = 7 * 24 * 3600
+SESSION_CUT = {"session_terminated", "timeout", "session_timeout"}
+
+# Firmwares que ya se sabe que cortan sesiones largas: se leen por partes
+# desde el primer intento y se omiten las partes que nunca responden.
+# Validado en XPON+2GE+2WIFI+USB+CATV 1234574546B0A4AC0 (2026-11-11).
+KNOWN_HEAVY = {
+    "V2.1.00-230825": ("InternetGatewayDevice.LANDevice.1.Hosts",),
+}
+
+
+def known_heavy(device):
+    """(leer por partes, partes que se omiten) segun el firmware."""
+
+    root = data_root(device)
+    version = (
+        ((device or {}).get(root or "", {}).get("DeviceInfo") or {})
+        .get("SoftwareVersion", {}) or {}
+    )
+    version = version.get("_value") if isinstance(version, dict) else None
+    skip = KNOWN_HEAVY.get(version)
+
+    return (skip is not None), tuple(skip or ())
 
 
 def _parse_ts(value):
@@ -114,6 +149,29 @@ def branch_state(node):
     }
 
 
+def _without(node, prefix, skip):
+    """Copia superficial de la rama sin las partes omitidas (rutas completas)."""
+
+    inside = [x[len(prefix) + 1:] for x in skip if x.startswith(prefix + ".")]
+    if not inside:
+        return node
+
+    def strip(current, rels):
+        out = dict(current)
+        for rel in rels:
+            head, _, tail = rel.partition(".")
+            if head not in out:
+                continue
+            if tail:
+                if isinstance(out[head], dict):
+                    out[head] = strip(out[head], [tail])
+            else:
+                out.pop(head, None)
+        return out
+
+    return strip(node, inside)
+
+
 def _incomplete(state):
     if not state["structure"] or state["params"] == 0:
         return True
@@ -136,7 +194,7 @@ def _light_parts(root, name, node):
     return parts
 
 
-def plan_refresh(device, max_age=None, light=False, now=None):
+def plan_refresh(device, max_age=None, light=False, now=None, skip=()):
     """Ramas que hay que pedir a la ONU.
 
     max_age: segundos. None ignora la antiguedad (solo datos incompletos);
@@ -151,12 +209,7 @@ def plan_refresh(device, max_age=None, light=False, now=None):
     tree = device[root]
     plan = []
 
-    for name in BRANCHES[root]:
-        node = tree.get(name)
-        if not isinstance(node, dict):
-            continue
-
-        state = branch_state(node)
+    def needs(state):
         # max_age=0 (forzar) relee siempre, aunque los relojes de ACS-Control
         # y GenieACS no coincidan y las fechas parezcan del futuro.
         stale = max_age is not None and (
@@ -164,12 +217,33 @@ def plan_refresh(device, max_age=None, light=False, now=None):
             or state["newest"] is None
             or now - state["newest"] >= max_age
         )
+        return _incomplete(state) or stale
 
-        if not (_incomplete(state) or stale):
+    for name in BRANCHES[root]:
+        node = tree.get(name)
+        if not isinstance(node, dict):
+            continue
+
+        prefix = f"{root}.{name}"
+        if not needs(branch_state(_without(node, prefix, skip))):
             continue
 
         parts = _light_parts(root, name, node) if light and name in SPLITTABLE else []
-        plan.extend(parts or [f"{root}.{name}"])
+
+        if parts:
+            # Solo las partes que faltan o estan viejas (y no omitidas).
+            chosen = []
+            for part in parts:
+                if any(part == x or part.startswith(x + ".") for x in skip):
+                    continue
+                sub = tree
+                for key in part.split(".")[1:]:
+                    sub = sub.get(key, {}) if isinstance(sub, dict) else {}
+                if not isinstance(sub, dict) or needs(branch_state(_without(sub, part, skip))):
+                    chosen.append(part)
+            plan.extend(chosen)
+        else:
+            plan.append(prefix)
 
     return plan
 
@@ -191,7 +265,7 @@ def data_status(device, max_age=None, now=None):
         node = tree.get(name)
         if not isinstance(node, dict):
             continue
-        state = branch_state(node)
+        state = branch_state(_without(node, f"{root}.{name}", known_heavy(device)[1]))
         if _incomplete(state):
             missing.append(name)
         # La fecha que se muestra es la de la rama mas vieja: asi
@@ -224,20 +298,37 @@ def _pending_refreshes(tasks):
 async def request_refresh(device_id, device, max_age=None, connection_request=True):
     """Encola la lectura de las ramas que hacen falta.
 
-    No duplica: si ya hay lecturas pendientes para la ONU, no agrega mas.
+    No duplica: una rama que ya tiene una lectura pendiente (ella o una rama
+    que la contiene) no se vuelve a pedir. Las demas si: si la ONU corto la
+    sesion, quedan pendientes las otras ramas, y las partes del modo liviano
+    deben encolarse igual.
     """
 
     pending = _pending_refreshes(await genieacs.get_tasks(device_id))
-    if pending:
-        return {
-            "status": "pending",
-            "branches": [t.get("objectName") for t in pending],
-        }
+    pending_names = [str(t.get("objectName") or "").rstrip(".") for t in pending]
 
-    light = bool(await get_redis().exists(LIGHT_KEY.format(device_id)))
-    branches = plan_refresh(device, max_age=max_age, light=light)
+    def covered(branch):
+        return any(branch == p or branch.startswith(p + ".") for p in pending_names)
+
+    heavy, heavy_skip = known_heavy(device)
+    light = heavy or bool(await get_redis().exists(LIGHT_KEY.format(device_id)))
+    skipped = [str(x) for x in (await get_redis().smembers(SKIP_KEY.format(device_id)) or ())]
+    skipped += list(heavy_skip)
+
+    def is_skipped(branch):
+        return any(branch == x or branch.startswith(x + ".") for x in skipped)
+
+    branches = [
+        b for b in plan_refresh(device, max_age=max_age, light=light, skip=tuple(skipped))
+        if not covered(b) and not is_skipped(b)
+    ]
 
     if not branches:
+        if pending:
+            return {
+                "status": "pending",
+                "branches": [t.get("objectName") for t in pending],
+            }
         return {"status": "fresh", "branches": [], "light": light}
 
     # Se encolan todas y solo la ultima despierta a la ONU: GenieACS procesa
@@ -289,7 +380,18 @@ async def refresh_status(device_id):
             )
 
     if failed:
-        await get_redis().set(LIGHT_KEY.format(device_id), "1", ex=LIGHT_TTL)
+        redis = get_redis()
+        was_light = bool(await redis.exists(LIGHT_KEY.format(device_id)))
+        await redis.set(LIGHT_KEY.format(device_id), "1", ex=LIGHT_TTL)
+
+        # Si ya se leia por partes y una parte vuelve a cortar la sesion,
+        # esa parte no se pide mas por un tiempo.
+        if was_light:
+            key = SKIP_KEY.format(device_id)
+            for item in failed:
+                if item.get("branch") and str(item.get("code") or "") in SESSION_CUT:
+                    await redis.sadd(key, item["branch"])
+            await redis.expire(key, SKIP_TTL)
 
     return {
         "pending": len(by_id),
