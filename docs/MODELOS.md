@@ -3,7 +3,7 @@
 Esta lista dice qué modelos funcionan con ACS-Control sobre GenieACS y qué se probó en cada uno.
 Se actualiza con cada modelo nuevo que se valida.
 
-Última actualización: 2026-11-11 (GenieACS 10.15.50.14: V2804AX30-H y ZTE F6600P).
+Última actualización: 2026-11-11 (GenieACS 10.15.50.14: V2804AX30-H y ZTE F6600P certificado).
 
 ## Cómo leer esta tabla
 
@@ -44,7 +44,7 @@ Reglas que aplican a todos los modelos:
 | VSOL / Realtek / MONU | XPON+2GE+2WiFi, XPON+2GE+2WiFi+USB+CATV, XPON+2GE+2WIFI+USB+CATV, XPON+4GE+2WiFi+USB+CATV | 8 firmwares (ver detalle) | Parcial | 👁 ⏳ | 👁 ⏳ | 👁 ⏳ | 👁 |
 | VSOL | V2802ACT, V2802DAC, V2804ACT, V2804DAC | V2.1.00-250210 y otros | Parcial | 👁 ⏳ | 👁 ⏳ | 👁 ⏳ | 👁 |
 | VSOL | V2804AX30-H | V1.1.00 | Parcial | 👁 ⏳ | — | 👁 ⏳ | 👁 |
-| ZTE | F6600P | V9.0.10P6N44 | En evaluación (solo lectura) | 👁 | — | 👁 | 👁 |
+| ZTE | F6600P | V9.0.10P6N44 | Certificado | ✅ | — | ✅ | ✅ |
 | X_CMCC | ZC-500W | — | Parcial | 👁 ⏳ | — | 👁 ⏳ | 👁 |
 | Varios | Familia X_CATV: KM1303, SML-702XW-C20/C21/C22, ONT1GE1FE1TVSWR, MUL-XPON-ONT200 | V2.1.14 (KM1303) | No certificado | 👁 | 👁 | — | ✅ SSID |
 
@@ -171,14 +171,31 @@ Lectura revisada en fw V1.1.00 (2 ONUs en línea). La escritura queda pendiente 
 - WiFi: WLAN 1 es 5 GHz y WLAN 5 es 2.4 GHz.
 - Sin CATV.
 
-### ZTE F6600P (en evaluación)
+### ZTE F6600P
 
-Lectura revisada en fw V9.0.10P6N44. ACS-Control solo muestra sus datos y permite cambiar el WiFi; WAN y seguridad quedan bloqueadas hasta validarlas en una ONU de laboratorio.
+Probado el 2026-11-11 en una ONU en servicio, con autorización del supervisor (fw V9.0.10P6N44).
 
-- VLAN, 802.1p y servicios en `X_ZTE-COM_VLANID`, `X_ZTE-COM_8021P` y `X_ZTE-COM_ServiceList` ("TR069_VoIP" se muestra como TR069 y VOIP).
-- Las dos WAN (TR-069/VoIP por DHCP en VLAN 46 e Internet PPPoE en VLAN 70) viven en el mismo WCD 1.
-- Seguridad (solo lectura): nivel del firewall en `Firewall.Config` (Low/Middle/High), Telnet en `X_ZTE-COM_Telnet` y FTP en `X_ZTE-COM_FTP`, protección contra escaneo de puertos, DMZ y filtros. Los usuarios de Telnet/FTP no se muestran.
-- Sin CATV.
+| Función | Resultado |
+|---|---|
+| Lectura completa | ✅ |
+| Crear / editar / eliminar WAN DHCP | ✅ (6 s / 3 s / 3 s) |
+| Crear / editar / eliminar WAN PPPoE | ✅ (6 s / 3 s / 3 s) |
+| La ruta por defecto del cliente no cambia al crear WAN | ✅ |
+| WAN IP fija | ⏳ Bloqueada hasta probarla en laboratorio (queda encendida con gateway y podría tomar la ruta por defecto). |
+| Asociar puertos LAN/WiFi a una WAN | ❌ El firmware no lo expone por TR-069 (`X_ZTE-COM_PortBinding` vacío); ACS-Control lo rechaza con un mensaje. |
+| WiFi 2.4 y 5 GHz | ✅ (reescritura del SSID) |
+| Telnet y FTP (LAN) encender / apagar | ✅ `X_ZTE-COM_Telnet.Enable`, `X_ZTE-COM_FTP.Enable` |
+| Nivel de firewall | 👁 `Firewall.Config` (Low/Middle/High), solo lectura. |
+| CATV | — |
+
+Al terminar, la ONU quedó idéntica a la foto inicial (597 parámetros de WAN, WiFi, firewall, Telnet y FTP; solo variaron mediciones de radio).
+
+Detalles técnicos:
+
+- VLAN, 802.1p y servicios en `X_ZTE-COM_VLANID` (con `X_ZTE-COM_VLANEnable`), `X_ZTE-COM_8021P` y `X_ZTE-COM_ServiceList` ("TR069_VoIP" se muestra como TR069 y VOIP).
+- `addObject` de un WANConnectionDevice nuevo da `cwmp.9002`: las WAN se crean como conexiones dentro del WCD 1, donde también viven la TR-069 y la de Internet. Al eliminar se borra solo la conexión.
+- Las conexiones nuevas nacen apagadas, "Unconfigured" y en VLAN 0; ACS-Control las configura y las enciende.
+- Al editar una WAN DHCP el nombre pasa a usar el número del WCD (`1_INTERNET_R_VID_998`). Es solo cosmético.
 
 ### Familia X_CATV (no certificada, prioridad baja)
 

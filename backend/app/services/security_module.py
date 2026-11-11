@@ -331,8 +331,8 @@ def ctcom_notes(device):
 
 # ZTE (F6600P fw V9.0.10): Telnet y FTP en X_ZTE-COM_Telnet / X_ZTE-COM_FTP
 # (Enable = servicio encendido; no distingue WAN/LAN), nivel del firewall en
-# Firewall.Config (texto Low/Middle/High). Solo lectura: el modelo esta en
-# evaluacion. Usuarios y contrasenas de esas ramas nunca se muestran.
+# Firewall.Config (texto Low/Middle/High, solo lectura). Telnet/FTP se
+# muestran como servicio LAN. Usuarios y contrasenas nunca se muestran.
 def _zte(device, name):
     try:
         node = device["InternetGatewayDevice"][name]
@@ -342,14 +342,15 @@ def _zte(device, name):
 
 
 def zte_table(device):
-    nodes = {}
+    nodes, paths = {}, {}
 
     for branch, svc in (("X_ZTE-COM_Telnet", "TELNET"), ("X_ZTE-COM_FTP", "FTP")):
         node = _zte(device, branch)
         if node and isinstance(node.get("Enable"), dict):
-            nodes[f"{svc}LanEnable"] = {"_value": to_bool(node["Enable"]), "_writable": False}
+            nodes[f"{svc}LanEnable"] = node["Enable"]
+            paths[f"{svc}LanEnable"] = f"InternetGatewayDevice.{branch}.Enable"
 
-    return nodes
+    return nodes, paths
 
 
 ZTE_NOTES = (
@@ -381,7 +382,7 @@ def zte_notes(device):
             "value": "Encendido" if to_bool(firewall["Enable"]) else "Apagado",
         })
 
-    notes.append({"label": "Edición", "value": "Solo lectura (modelo en evaluación)"})
+    notes.append({"label": "Nivel de firewall", "value": "Solo lectura en este modelo"})
     return notes
 
 
@@ -437,7 +438,7 @@ def access_table(device):
             nodes, paths = ctcom_table(device), {}
 
         if not nodes:
-            nodes, paths = zte_table(device), {}
+            nodes, paths = zte_table(device)
 
         return (nodes or None), paths
 
@@ -504,7 +505,8 @@ def firewall_source(device):
     firewall = _zte(device, "Firewall")
 
     if firewall and isinstance(firewall.get("X_ZTE-COM_ALG"), dict) and isinstance(firewall.get("Config"), dict):
-        return "zte", firewall["Config"]
+        # Solo lectura: Middle no tiene boton y no se ha probado cambiarlo.
+        return "zte", {**firewall["Config"], "_writable": False}
 
     return None, None
 

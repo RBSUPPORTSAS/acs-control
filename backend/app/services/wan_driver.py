@@ -124,7 +124,7 @@ def realtek_wan(device):
 REALTEK_CREATE_MSG = "En esta ONU usa la creación estándar de WAN"
 
 # Drivers cuyas WAN se crean y editan con app.services.vendor_wan.
-VENDOR_DRIVERS = ("huawei", "realtek", "cmcc")
+VENDOR_DRIVERS = ("huawei", "realtek", "cmcc", "zte")
 
 
 def cmcc_wan(device):
@@ -173,13 +173,6 @@ def zte_wan(device):
 # su cliente TR-069 sin responder. La gestion probada (DHCP / IP fija)
 # queda en el codigo, desactivada aqui.
 UNCERTIFIED = {
-    # ZTE F6600P: lectura validada (GenieACS 10.15.50.14). Crear/editar WAN
-    # usa X_ZTE-COM_* y no hay traduccion ni prueba de escritura todavia.
-    "zte": (
-        "Modelo en evaluación: ACS-Control solo muestra sus datos. "
-        "Permite cambiar SSID y clave WiFi; WAN, CATV y seguridad están desactivados "
-        "hasta validarlos en una ONU de laboratorio."
-    ),
     "x_catv_wan": (
         "Modelo no certificado: ACS-Control solo muestra sus datos. "
         "Permite cambiar SSID y clave WiFi; WAN, CATV y seguridad están desactivados."

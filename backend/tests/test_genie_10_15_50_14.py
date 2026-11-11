@@ -4,8 +4,9 @@ ZTE F6600P (fw V9.0.10P6N44).
 - V2804AX30-H: PPPoE con TransportType "L2TP" y sin DefaultGateway;
   DeviceInfo completa da too_many_commits (se lee por partes); una ONU
   nueva llega sin la lista de ramas raiz; FireWallGrade vacio.
-- F6600P: VLAN/802.1p/servicios en X_ZTE-COM_*; Telnet/FTP y firewall
-  propios. Modelo en evaluacion (solo lectura).
+- F6600P: VLAN/802.1p/servicios en X_ZTE-COM_*; todas las WAN en el WCD 1
+  (addObject de WCD da cwmp.9002); Telnet/FTP propios; nivel de firewall
+  en solo lectura. Validado en ZTEGDCEF5AB1 (2026-11-11).
 """
 
 import pytest
@@ -129,16 +130,36 @@ def test_zte_wan():
     assert inet["type"] == "PPPoE" and inet["vlan"] == 70 and inet["services"] == ["INTERNET"]
 
 
-def test_zte_en_evaluacion_solo_lectura():
+def test_zte_certificado_y_seguridad():
     d = zte()
-    assert certification(d)["certified"] is False
+    assert certification(d)["certified"] is True
     s = security_state(d)
     assert s["firewall_kind"] == "zte" and s["firewall_label"] == "Medio"
+    assert s["firewall_writable"] is False
     svc = {x["id"]: x for x in s["services"]}
     assert svc["telnet"]["lan_enabled"] is False and svc["ftp"]["lan_enabled"] is True
-    assert not any(x["lan_writable"] or x["wan_writable"] for x in s["services"])
+    assert svc["telnet"]["lan_writable"] is True
     text = str(s)
     assert "root" not in text and "admin" not in text
+
+
+def test_zte_servicio_telnet_escribe_su_rama():
+    from app.services.security_module import service_changes
+    values, requested = service_changes(zte(), "telnet", {"lan_enabled": True})
+    assert values == [["InternetGatewayDevice.X_ZTE-COM_Telnet.Enable", True, "xsd:boolean"]]
+
+
+def test_zte_traduccion_wan():
+    from app.services.vendor_wan import translate
+    from app.services.x_ctcom_wan_builder import build_dhcp_values
+    vals = translate(build_dhcp_values(1, 2, {"vlan": 999, "priority": 3})["parameter_values"], "zte")
+    by = {p.rsplit(".", 1)[1]: v for p, v, _ in vals}
+    assert by["X_ZTE-COM_VLANID"] == 999 and by["X_ZTE-COM_VLANEnable"] is True
+    assert by["X_ZTE-COM_8021P"] == 3 and by["X_ZTE-COM_ServiceList"] == "INTERNET"
+    assert not any("X_CT-COM" in p for p, _, _ in vals)
+    with pytest.raises(ValueError):
+        translate(build_dhcp_values(1, 2, {"vlan": 999, "bindings": [
+            "InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1"]})["parameter_values"], "zte")
 
 
 def test_rama_leida_por_partes_esta_completa():
