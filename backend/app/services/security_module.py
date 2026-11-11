@@ -329,6 +329,62 @@ def ctcom_notes(device):
     return notes
 
 
+# ZTE (F6600P fw V9.0.10): Telnet y FTP en X_ZTE-COM_Telnet / X_ZTE-COM_FTP
+# (Enable = servicio encendido; no distingue WAN/LAN), nivel del firewall en
+# Firewall.Config (texto Low/Middle/High). Solo lectura: el modelo esta en
+# evaluacion. Usuarios y contrasenas de esas ramas nunca se muestran.
+def _zte(device, name):
+    try:
+        node = device["InternetGatewayDevice"][name]
+    except Exception:
+        return None
+    return node if isinstance(node, dict) else None
+
+
+def zte_table(device):
+    nodes = {}
+
+    for branch, svc in (("X_ZTE-COM_Telnet", "TELNET"), ("X_ZTE-COM_FTP", "FTP")):
+        node = _zte(device, branch)
+        if node and isinstance(node.get("Enable"), dict):
+            nodes[f"{svc}LanEnable"] = {"_value": to_bool(node["Enable"]), "_writable": False}
+
+    return nodes
+
+
+ZTE_NOTES = (
+    ("X_ZTE-COM_DoS.Anti-PortScan.Enable", "Protección contra escaneo de puertos"),
+    ("X_ZTE-COM_DMZ.Enable", "DMZ"),
+    ("X_ZTE-COM_MacFilterService.Enable", "Filtro MAC"),
+    ("X_ZTE-COM_URLFilterService.Enable", "Filtro URL"),
+)
+
+
+def zte_notes(device):
+    firewall = _zte(device, "Firewall")
+
+    if not firewall or not isinstance(firewall.get("X_ZTE-COM_ALG"), dict) and not _zte(device, "X_ZTE-COM_Telnet"):
+        return []
+
+    notes = []
+
+    for path, label in ZTE_NOTES:
+        node = firewall
+        for part in path.split("."):
+            node = node.get(part) if isinstance(node, dict) else None
+        if isinstance(node, dict) and "_value" in node:
+            notes.append({"label": label, "value": "Activado" if to_bool(node) else "Desactivado"})
+
+    if isinstance(firewall.get("Enable"), dict):
+        notes.insert(0, {
+            "label": "Firewall",
+            "value": "Encendido" if to_bool(firewall["Enable"]) else "Apagado",
+        })
+
+    notes.append({"label": "Edición", "value": "Solo lectura (modelo en evaluación)"})
+    return notes
+
+
 def rz_rules(device):
     """{"WAN": (ruta, nodo), "LAN": (ruta, nodo)} de X_RZ_ServiceControl."""
 
@@ -379,6 +435,9 @@ def access_table(device):
 
         if not nodes:
             nodes, paths = ctcom_table(device), {}
+
+        if not nodes:
+            nodes, paths = zte_table(device), {}
 
         return (nodes or None), paths
 
@@ -442,6 +501,11 @@ def firewall_source(device):
     if isinstance(node, dict):
         return "cmcc", node
 
+    firewall = _zte(device, "Firewall")
+
+    if firewall and isinstance(firewall.get("X_ZTE-COM_ALG"), dict) and isinstance(firewall.get("Config"), dict):
+        return "zte", firewall["Config"]
+
     return None, None
 
 
@@ -451,7 +515,7 @@ def firewall_grade(device):
     if kind == "grade":
         return to_int(node)
 
-    if kind in ("huawei", "rz"):
+    if kind in ("huawei", "rz", "zte"):
         return HUAWEI_LEVELS.get(str(unwrap(node) or "").strip().lower())
 
     if kind == "cmcc":
@@ -620,14 +684,16 @@ def security_state(device):
             else ("Encendido" if grade == 1 else "Apagado")
             if firewall_source(device)[0] == "cmcc"
             else firewall_label(grade)
-            if firewall_source(device)[0] in ("huawei", "rz") or grade in (0, 1)
+            if firewall_source(device)[0] in ("huawei", "rz", "zte") or grade in (0, 1)
+            # V2804AX30-H fw V1.1.00: FireWallGrade llega vacio.
+            else "No reportado" if grade is None
             else f"Desconocido ({grade})"
         ),
 
         "firewall_kind": firewall_source(device)[0],
 
         # Estado de otras protecciones (solo lectura).
-        "notes": cmcc_notes(device) + ctcom_notes(device),
+        "notes": cmcc_notes(device) + ctcom_notes(device) + zte_notes(device),
 
         "firewall_writable":
             writable(grade_obj),
