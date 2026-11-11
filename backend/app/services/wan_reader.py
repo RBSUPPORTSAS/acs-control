@@ -293,6 +293,31 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
     }
 
 
+def default_route_gateways(device):
+    """{ruta de la conexion: gateway} de las rutas por defecto de la ONU."""
+
+    table = (
+        (device or {}).get("InternetGatewayDevice", {})
+        .get("Layer3Forwarding", {}).get("Forwarding", {})
+    )
+    out = {}
+
+    for key, route in (table or {}).items():
+        if not str(key).isdigit() or not isinstance(route, dict):
+            continue
+
+        if field(route, "DestIPAddress") not in ("0.0.0.0", None) or field(route, "Enable") is False:
+            continue
+
+        gateway = field(route, "GatewayIPAddress")
+        interface = str(field(route, "Interface") or "").rstrip(".")
+
+        if interface and gateway and gateway != "0.0.0.0":
+            out.setdefault(interface, gateway)
+
+    return out
+
+
 def has_values(obj):
     """True si al menos un parametro directo de la conexion trae valor."""
 
@@ -402,6 +427,21 @@ def read_wan(device):
                 item["priority_8021p"] = l2_marking.read_priority(
                     device, item.get("wan_connection_device")
                 )
+
+    # Algunas ONU (MONU xPON+1GE+1FE+WIFI+CATV fw V3.3.0) dejan vacio el
+    # DefaultGateway de la WAN estatica; el gateway real esta en la ruta
+    # por defecto de Layer3Forwarding que sale por esa conexion.
+    default_gw = default_route_gateways(device)
+
+    for item in result:
+        if not item.get("gateway") and not item.get("synthetic"):
+            path = (
+                "InternetGatewayDevice.WANDevice.1.WANConnectionDevice."
+                f"{item.get('wan_connection_device')}."
+                f"{item.get('object_type')}.{item.get('instance')}"
+            )
+            if default_gw.get(path):
+                item["gateway"] = default_gw[path]
 
     # Red de seguridad para cualquier marca: la WAN cuya IP es la del
     # connection request (la que usa el ACS para hablar con la ONU) es la
