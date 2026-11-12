@@ -1171,7 +1171,7 @@ async def create_vsol_ip_wan(
         "nat": payload.get("nat", True),
         "mtu": payload.get("mtu", 1500),
         "bindings": payload.get("bindings", []),
-        "enabled": False,
+        "enabled": True,
     }
 
     if mode == "STATIC":
@@ -1348,7 +1348,7 @@ async def create_vsol_pppoe_wan(
         "mtu": payload.get("mtu", 1492),
         "username": payload.get("username"),
         "bindings": payload.get("bindings", []),
-        "enabled": False,
+        "enabled": True,
         "password_changed": bool(payload.get("password")),
     }
 
@@ -1587,6 +1587,39 @@ async def toggle_pppoe_wan_wcd(
 
 
 # ACS_WAN_DELETE_WCD_14B3
+async def _delete_retrying(device_id, object_name, attempts=3):
+    """deleteObject reintentando si la ONU responde cwmp.9002.
+
+    VSOL V2804AX30-H: justo despues de editar una WAN (cambio de VLAN), el
+    borrado del WCD da 9002 "Internal error"; segundos despues funciona.
+    El fault deja la tarea en cola, asi que se limpian antes de reintentar.
+    """
+
+    import asyncio
+
+    for attempt in range(attempts):
+        await genieacs.delete_object(device_id, object_name)
+
+        faults = [
+            f for f in await genieacs.get_faults(device_id)
+            if str(f.get("code")) == "cwmp.9002"
+            and object_name in str(f.get("provisions") or "")
+        ]
+
+        if not faults:
+            return
+
+        for fault in faults:
+            await genieacs.delete_fault(fault["_id"])
+
+        for task in await genieacs.get_tasks(device_id):
+            if task.get("name") == "deleteObject" and task.get("objectName") == object_name:
+                await genieacs.delete_task(task["_id"])
+
+        if attempt < attempts - 1:
+            await asyncio.sleep(5)
+
+
 @router.delete(
     "/api/devices/{device_id}/wan/{wcd}/{object_type}/{instance}"
 )
@@ -1735,10 +1768,19 @@ async def delete_wan_wcd(
             )
 
         else:
-            await genieacs.delete_object(
-                device_id,
-                object_name
-            )
+            # VSOL (V2804AX30-H): borrar un WCD con la PPPoE encendida y
+            # marcando da cwmp.9002; apagada se borra bien. Se apaga antes.
+            if detect_wan_driver(device) == "x_ctcom_wan" and target.get("enabled"):
+                await genieacs.set_parameter_values(
+                    device_id,
+                    [[
+                        f"{object_name}.{object_type}.{instance}.Enable",
+                        False,
+                        "xsd:boolean",
+                    ]],
+                )
+
+            await _delete_retrying(device_id, object_name)
 
         confirmed = False
 

@@ -43,7 +43,7 @@ Reglas que aplican a todos los modelos:
 | MONU | xPON+1GE+1FE+WIFI+CATV | V3.3.0-210624 | Certificado | ✅ | ❌ | ✅ | ✅ |
 | VSOL / Realtek / MONU | XPON+2GE+2WiFi, XPON+2GE+2WiFi+USB+CATV, XPON+2GE+2WIFI+USB+CATV, XPON+4GE+2WiFi+USB+CATV | 8 firmwares (ver detalle) | Parcial | 👁 ⏳ | 👁 ⏳ | 👁 ⏳ | 👁 |
 | VSOL | V2802ACT, V2802DAC, V2804ACT, V2804DAC | V2.1.00-250210 y otros | Parcial | 👁 ⏳ | 👁 ⏳ | 👁 ⏳ | 👁 |
-| VSOL | V2804AX30-H | V1.1.00 | Parcial | 👁 ⏳ | — | 👁 ⏳ | 👁 |
+| VSOL | V2804AX30-H | V1.1.00 | Certificado (WAN) | ✅ | — | 👁 ⏳ | 👁 |
 | ZTE | F6600P | V9.0.10P6N44 | Certificado | ✅ | — | ✅ | ✅ |
 | X_CMCC | ZC-500W | — | Parcial | 👁 ⏳ | — | 👁 ⏳ | 👁 |
 | Varios | Familia X_CATV: KM1303, SML-702XW-C20/C21/C22, ONT1GE1FE1TVSWR, MUL-XPON-ONT200 | V2.1.14 (KM1303) | No certificado | 👁 | 👁 | — | ✅ SSID |
@@ -161,15 +161,31 @@ XPON+2GE+2WiFi, XPON+2GE+2WiFi+USB+CATV, XPON+2GE+2WIFI+USB+CATV y XPON+4GE+2WiF
 
 ### VSOL V2804AX30-H
 
-Lectura revisada en fw V1.1.00 (2 ONUs en línea). La escritura queda pendiente de autorización o de una ONU de laboratorio.
+Probado el 2026-11-11 en una ONU en servicio, con autorización del supervisor (fw V1.1.00).
 
-- La WAN de Internet es PPPoE en VLAN 70 y lleva también el servicio TR-069 (protegida). Algunas tienen otra WAN DHCP en VLAN 46 con servicio OTHER.
+| Función | Resultado |
+|---|---|
+| Lectura completa | ✅ 2 de 2 ONUs en línea |
+| Crear / editar / eliminar WAN PPPoE | ✅ (11 s / 8 s / 6 s) |
+| Crear / editar / eliminar WAN DHCP | ✅ (11 s / 7 s / 13 s) |
+| Crear / editar / eliminar WAN IP fija | ✅ (12 s / 10 s / 7 s) |
+| La PPPoE del cliente no se cae | ✅ (su tiempo de conexión siguió contando) |
+| Seguridad | 👁 `X_HW_Security.AclServices` (formato VSOL); escritura sin probar |
+| WiFi | 👁 WLAN 1 es 5 GHz y WLAN 5 es 2.4 GHz |
+| CATV | — |
+
+Al terminar, la ONU quedó idéntica a la foto inicial (116 parámetros de WAN).
+
+Detalles técnicos:
+
+- La interfaz usa los creadores VSOL (`/wan/vsol/*`): un WCD nuevo por WAN, VLAN y 802.1p en la conexión y en `X_CT-COM_WANGponLinkConfig` / `WANEponLinkConfig`.
+- Desde el PR #17 la WAN se enciende al final, ya configurada (antes quedaba apagada y no había cómo encenderla). Aplica a todas las ONUs con fabricante VSOL.
+- Borrar un WCD justo después de editarlo, o con la PPPoE encendida, puede dar `cwmp.9002`: ACS-Control apaga la conexión antes y reintenta el borrado.
 - El firmware reporta `TransportType` "L2TP" en una PPPoE normal: ACS-Control usa `ConnectionType` (PPPoE_Routed) y la muestra como PPPoE.
 - La PPPoE no reporta `DefaultGateway`: se toma de `RemoteIPAddress`.
 - Leer `DeviceInfo` completa da `too_many_commits`: ACS-Control la lee por partes.
-- Seguridad en `X_HW_Security.AclServices` (formato VSOL). `FireWallGrade` llega vacío: se muestra "No reportado".
-- WiFi: WLAN 1 es 5 GHz y WLAN 5 es 2.4 GHz.
-- Sin CATV.
+- `FireWallGrade` llega vacío: se muestra "No reportado".
+- `Layer3Forwarding` no publica rutas ni `DefaultConnectionService`.
 
 ### ZTE F6600P
 

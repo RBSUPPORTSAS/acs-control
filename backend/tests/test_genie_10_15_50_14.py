@@ -210,3 +210,79 @@ async def test_onu_sin_ramas_raiz_conocidas_las_descubre(redis, monkeypatch):
         "parameterNames": ["InternetGatewayDevice.Layer3Forwarding.DefaultConnectionService"],
     }
     assert {"name": "refreshObject", "objectName": "InternetGatewayDevice.Layer3Forwarding"} in g.posted
+
+
+class FakeDeleteGenie:
+    """Primer deleteObject da cwmp.9002 (VSOL justo despues de editar)."""
+
+    def __init__(self):
+        self.deletes = 0
+        self.faults = []
+        self.tasks = []
+
+    async def delete_object(self, device_id, name):
+        self.deletes += 1
+        if self.deletes == 1:
+            self.tasks = [{"_id": "t1", "name": "deleteObject", "objectName": name}]
+            self.faults = [{"_id": "f1", "code": "cwmp.9002",
+                            "provisions": f'[["instances","{name}",0]]'}]
+        return 200
+
+    async def get_faults(self, device_id):
+        return self.faults
+
+    async def delete_fault(self, fault_id):
+        self.faults = [f for f in self.faults if f["_id"] != fault_id]
+
+    async def get_tasks(self, device_id):
+        return self.tasks
+
+    async def delete_task(self, task_id):
+        self.tasks = [t for t in self.tasks if t["_id"] != task_id]
+
+
+async def test_borrar_reintenta_tras_9002(monkeypatch):
+    import asyncio
+    from app.api.routers import wan
+
+    g = FakeDeleteGenie()
+    monkeypatch.setattr(wan, "genieacs", g)
+
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", no_sleep)
+    await wan._delete_retrying("X", "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2")
+    assert g.deletes == 2 and g.faults == [] and g.tasks == []
+
+
+async def test_vsol_crea_la_wan_encendida(monkeypatch):
+    from app.services import vsol_wan_creator as vc
+
+    writes = []
+
+    class G:
+        def __init__(self):
+            self.wcds = {"1"}
+            self.conns = set()
+
+        async def get_device(self, device_id):
+            wcd = {k: {"WANPPPConnection": {i: {} for i in self.conns}} for k in self.wcds}
+            return {"InternetGatewayDevice": {"WANDevice": {"1": {"WANConnectionDevice": wcd}}}}
+
+        async def add_object(self, device_id, name):
+            if name.endswith("WANConnectionDevice"):
+                self.wcds.add("2")
+            else:
+                self.conns.add("1")
+
+        async def set_parameter_values(self, device_id, values):
+            writes.extend(values)
+
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(vc.asyncio, "sleep", no_sleep)
+    await vc.create_vsol_pppoe(G(), "X", {"vlan": 999, "priority": 0, "username": "u", "password": "p"}, {})
+    enable = [v for p, v, _ in writes if p.endswith("WANPPPConnection.1.Enable")]
+    assert enable[-1] is True
