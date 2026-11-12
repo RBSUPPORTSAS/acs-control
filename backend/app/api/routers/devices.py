@@ -7,7 +7,7 @@ from fastapi import Depends, APIRouter, HTTPException, Query
 from app.services.genieacs import genieacs
 from app.services.device_normalizer import NORMALIZE_PROJECTION, normalize_device
 
-from app.api.deps import is_admin, require_user
+from app.api.deps import is_admin, require_network, require_user
 from app.core.database import get_db
 from app.services.audit_service import add_audit
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -205,7 +205,7 @@ async def device_refresh_state(device_id: str):
 
 # ACS_TAG_WRITE_08C
 
-@router.post("/api/devices/{device_id}/tags/{tag}")
+@router.post("/api/devices/{device_id}/tags/{tag}", dependencies=[Depends(require_network)])
 async def add_device_tag(
     device_id: str,
     tag: str,
@@ -242,7 +242,7 @@ async def add_device_tag(
     }
 
 
-@router.delete("/api/devices/{device_id}/tags/{tag}")
+@router.delete("/api/devices/{device_id}/tags/{tag}", dependencies=[Depends(require_network)])
 async def delete_device_tag(
     device_id: str,
     tag: str,

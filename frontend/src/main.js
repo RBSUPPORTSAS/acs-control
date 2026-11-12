@@ -2886,8 +2886,13 @@ function formatDate(value) {
             currentUser.value?.role === 'admin'
         )
 
+        // Rol "wifi" (Soporte Wi-Fi): ve la ONU, sus equipos y cambia el Wi-Fi.
+        const canManageNetwork = computed(() =>
+            ['admin', 'technical'].includes(currentUser.value?.role)
+        )
+
         function roleLabel(role) {
-            return role === 'admin' ? 'Admin' : 'Técnico'
+            return { admin: 'Admin', technical: 'Técnico', wifi: 'Soporte Wi-Fi' }[role] || role
         }
 
         // Cualquier 401 de la API (sesion vencida o revocada) vuelve al login.
@@ -3167,6 +3172,7 @@ function formatDate(value) {
             loginError,
             isAdmin,
             roleLabel,
+            canManageNetwork,
             login,
             logout,
             usersOpen,
@@ -4544,6 +4550,7 @@ function formatDate(value) {
 
                         <select v-model="userForm.role">
                             <option value="technical">Técnico</option>
+                            <option value="wifi">Soporte Wi-Fi</option>
                             <option value="admin">Admin</option>
                         </select>
 
@@ -4595,6 +4602,7 @@ function formatDate(value) {
                                         @change="updateUser(u, { role: $event.target.value }, 'Cambiar el rol cierra las sesiones abiertas de ' + u.username + '. ¿Continuar?')"
                                     >
                                         <option value="technical">Técnico</option>
+                                        <option value="wifi">Soporte Wi-Fi</option>
                                         <option value="admin">Admin</option>
                                     </select>
                                 </td>
@@ -5495,6 +5503,7 @@ function formatDate(value) {
                         </button>
 
                         <button
+                            v-if="canManageNetwork"
                             :class="{
                                 active:
                                     activeTab === 'internet'
@@ -5515,6 +5524,7 @@ function formatDate(value) {
                         </button>
 
                         <button
+                            v-if="canManageNetwork"
                             :class="{
                                 active:
                                     activeTab === 'catv'
@@ -5535,6 +5545,7 @@ function formatDate(value) {
                         </button>
 
                         <button
+                            v-if="canManageNetwork"
                             :class="{
                                 active:
                                     activeTab === 'seguridad'
@@ -5719,6 +5730,7 @@ function formatDate(value) {
                                         {{ tag }}
 
                                         <button
+                                            v-if="canManageNetwork"
                                             @click="removeTag(tag)"
                                             :disabled="tagBusy"
                                             title="Eliminar etiqueta"
@@ -5735,7 +5747,7 @@ function formatDate(value) {
                                     Sin etiquetas
                                 </span>
 
-                                <div class="tag-add-row">
+                                <div v-if="canManageNetwork" class="tag-add-row">
 
                                     <input
                                         v-model="newTag"

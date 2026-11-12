@@ -60,7 +60,7 @@ DEVICE = {
     },
 }
 
-PASSWORDS = {"jefe": "clave-admin-123", "tecnico": "clave-tecnico-123"}
+PASSWORDS = {"jefe": "clave-admin-123", "tecnico": "clave-tecnico-123", "soporte": "clave-soporte-123"}
 
 
 @pytest.fixture
@@ -102,6 +102,7 @@ async def client(monkeypatch):
     async with Session() as db:
         db.add(User(username="jefe", role="admin", password_hash=hash_password(PASSWORDS["jefe"])))
         db.add(User(username="tecnico", role="technical", password_hash=hash_password(PASSWORDS["tecnico"])))
+        db.add(User(username="soporte", role="wifi", password_hash=hash_password(PASSWORDS["soporte"])))
         await db.commit()
 
     transport = httpx.ASGITransport(app=app)

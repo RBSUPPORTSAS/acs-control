@@ -182,6 +182,7 @@ Roles disponibles:
 |---|---|
 | `admin` | Todo: gestión de ONUs, auditoría, configuración y usuarios (sección Staff) |
 | `technical` | Gestión de ONUs (WAN, Wi-Fi, CATV, etiquetas). No ve datos del servidor GenieACS, ni la auditoría, ni la configuración |
+| `wifi` | Soporte Wi-Fi: ve el inventario, la información de la ONU y sus equipos conectados, y cambia el Wi-Fi (SSID y clave). Sin WAN, CATV, seguridad ni etiquetas |
 
 Después, los demás usuarios se crean desde la interfaz (**Sistema → Staff**).
 Para recuperar el acceso use `reset-password` en lugar de `create`.
