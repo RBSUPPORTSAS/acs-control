@@ -3283,3 +3283,42 @@ tbody tr:hover {
 .read-only .catv-buttons {
     display: none !important;
 }
+
+
+/* Equipos conectados */
+.hosts-note {
+    margin: 0 0 12px;
+    color: var(--muted, #6b7280);
+    font-size: 13px;
+}
+
+.hosts-table-wrap {
+    overflow-x: auto;
+}
+
+.hosts-table {
+    width: 100%;
+    font-size: 13px;
+}
+
+.hosts-table th,
+.hosts-table td {
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--border, #e5e7eb);
+}
+
+.hosts-table td small {
+    display: block;
+    color: var(--muted, #6b7280);
+    font-size: 11px;
+}
+
+.hosts-table tr.inactive td {
+    opacity: 0.55;
+}
+
+.hosts-table .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}

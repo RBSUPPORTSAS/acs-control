@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 
 def get_parameter(device: dict, path: str):
@@ -22,6 +23,11 @@ def get_parameter(device: dict, path: str):
 def first_value(device: dict, paths: list[str]):
     for path in paths:
         value = get_parameter(device, path)
+
+        # Parametro conocido pero sin valor (p. ej. UpTime proyectado de una
+        # ONU que nunca lo reporto): GenieACS devuelve el nodo, no un valor.
+        if isinstance(value, dict):
+            continue
 
         if value not in (None, ""):
             return value
@@ -66,7 +72,30 @@ NORMALIZE_PROJECTION = [
         "HardwareVersion",
         "UpTime",
     )
+] + [
+    # IP con la que la ONU se anuncia al ACS (la que usa GenieACS para
+    # despertarla). Viene en cada inform.
+    f"{root}.ManagementServer.ConnectionRequestURL"
+    for root in ("InternetGatewayDevice", "Device")
 ]
+
+
+def tr069_ip(device: dict):
+    url = first_value(
+        device,
+        [
+            "InternetGatewayDevice.ManagementServer.ConnectionRequestURL",
+            "Device.ManagementServer.ConnectionRequestURL",
+        ],
+    )
+
+    if not url:
+        return None
+
+    try:
+        return urlparse(str(url)).hostname
+    except ValueError:
+        return None
 
 
 def normalize_device(device: dict):
@@ -141,6 +170,7 @@ def normalize_device(device: dict):
         "software_version": software_version,
         "hardware_version": hardware_version,
         "uptime": uptime,
+        "tr069_ip": tr069_ip(device),
         "last_inform": last_inform,
         "online": online_status(last_inform),
         "tags": device.get("_tags") or [],

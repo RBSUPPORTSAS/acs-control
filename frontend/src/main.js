@@ -97,6 +97,11 @@ const wifi = ref(null)
 const wifiLoading = ref(false)
 const wifiError = ref(null)
 
+// Equipos conectados (LANDevice.Hosts)
+const hosts = ref(null)
+const hostsLoading = ref(false)
+const hostsError = ref(null)
+
 // ACS_CATV_UI_07B
 const catv = ref(null)
 const catvLoading = ref(false)
@@ -438,7 +443,8 @@ const manufacturerOptions = computed(() => {
         function deviceIp(device) {
 
             return (
-                device?.ip_address
+                device?.tr069_ip
+                || device?.ip_address
                 || device?.ipAddress
                 || device?.ip
                 || '-'
@@ -980,6 +986,7 @@ async function loadHealth() {
             internet: openWan,
             wifi: openWifi,
             catv: openCatv,
+            equipos: openHosts,
             seguridad: openSecurity
         })
 
@@ -1214,6 +1221,34 @@ function closeDevice() {
         }
 
         
+        async function openHosts() {
+            activeTab.value = 'equipos'
+            hostsLoading.value = true
+            hostsError.value = null
+
+            try {
+                const id = encodeURIComponent(selectedDevice.value.id)
+                const r = await fetch(`/api/devices/${id}/hosts`, { cache: 'no-store' })
+
+                if (!r.ok)
+                    throw new Error(`HTTP ${r.status}`)
+
+                hosts.value = await r.json()
+
+            } catch (e) {
+                console.error(e)
+                hostsError.value = 'No fue posible leer los equipos conectados.'
+            } finally {
+                hostsLoading.value = false
+            }
+        }
+
+        function hostDuration(seconds) {
+            if (seconds === null || seconds === undefined)
+                return '-'
+            return formatUptime(seconds)
+        }
+
         async function openCatv() {
             activeTab.value = 'catv'
             catvLoading.value = true
@@ -3210,6 +3245,12 @@ function formatDate(value) {
             wifiChannels,
             saveWifi,
 
+            hosts,
+            hostsLoading,
+            hostsError,
+            openHosts,
+            hostDuration,
+
             catv,
             catvLoading,
             catvError,
@@ -4228,7 +4269,7 @@ function formatDate(value) {
 
                                     <th>Firmware</th>
 
-                                    <th>IP</th>
+                                    <th title="IP con la que la ONU se anuncia al ACS (ConnectionRequestURL)">IP TR-069</th>
 
                                     <th>Tags</th>
 
@@ -5486,6 +5527,16 @@ function formatDate(value) {
                         <button
                             :class="{
                                 active:
+                                    activeTab === 'equipos'
+                            }"
+                            @click="openHosts"
+                        >
+                            Equipos
+                        </button>
+
+                        <button
+                            :class="{
+                                active:
                                     activeTab === 'seguridad'
                             }"
                             @click="openSecurity"
@@ -5548,6 +5599,17 @@ function formatDate(value) {
                                         <strong class="mono">
                                             {{
                                                 selectedDevice.serial_number
+                                                || '-'
+                                            }}
+                                        </strong>
+                                    </div>
+
+
+                                    <div class="info-box">
+                                        <span>IP TR-069</span>
+                                        <strong class="mono">
+                                            {{
+                                                selectedDevice.tr069_ip
                                                 || '-'
                                             }}
                                         </strong>
@@ -6102,6 +6164,88 @@ function formatDate(value) {
 
                                 </div>
 
+                            </div>
+
+
+                            <!-- EQUIPOS CONECTADOS -->
+
+                            <div
+                                v-else-if="activeTab === 'equipos'"
+                            >
+                                <div v-if="hostsLoading" class="loading">
+                                    <div class="spinner"></div>
+                                    Consultando equipos conectados...
+                                </div>
+
+                                <div v-else-if="hostsError" class="error-message">
+                                    {{ hostsError }}
+                                </div>
+
+                                <template v-else-if="hosts">
+
+                                    <h3>Equipos conectados</h3>
+
+                                    <p v-if="!hosts.supported" class="hosts-note">
+                                        {{ hosts.reason }}
+                                    </p>
+
+                                    <template v-else>
+
+                                        <p class="hosts-note">
+                                            {{ hosts.hosts.length }}
+                                            {{ hosts.hosts.length === 1 ? 'equipo' : 'equipos' }}
+                                            <template v-if="hosts.updated_at">
+                                                · leídos {{ relativeTime(hosts.updated_at).toLowerCase() }}
+                                            </template>
+                                            <template v-if="hosts.reported_count !== null && hosts.reported_count !== hosts.hosts.length">
+                                                · la ONU reporta {{ hosts.reported_count }}; use ↻ para leerlos de nuevo
+                                            </template>
+                                        </p>
+
+                                        <p v-if="!hosts.hosts.length" class="hosts-note">
+                                            La ONU no reporta equipos conectados.
+                                        </p>
+
+                                        <div v-else class="hosts-table-wrap">
+                                            <table class="hosts-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Equipo</th>
+                                                        <th>IP</th>
+                                                        <th>MAC</th>
+                                                        <th>Conexión</th>
+                                                        <th>Conectado</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr
+                                                        v-for="h in hosts.hosts"
+                                                        :key="(h.mac || '') + (h.ip || '')"
+                                                        :class="{ inactive: h.active === false }"
+                                                    >
+                                                        <td>
+                                                            <strong>{{ h.hostname || 'Sin nombre' }}</strong>
+                                                            <small v-if="h.active === false">Inactivo</small>
+                                                        </td>
+                                                        <td class="mono">
+                                                            {{ h.ip || '-' }}
+                                                            <small v-if="h.address_source">{{ h.address_source === 'Static' ? 'Fija' : h.address_source }}</small>
+                                                        </td>
+                                                        <td class="mono">{{ h.mac || '-' }}</td>
+                                                        <td>
+                                                            {{ h.interface || '-' }}
+                                                            <small v-if="h.signal_dbm !== null">Señal {{ h.signal_dbm }} dBm</small>
+                                                            <small v-if="h.link_rate">{{ h.link_rate }} Mbps</small>
+                                                        </td>
+                                                        <td>{{ hostDuration(h.online_seconds) }}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                    </template>
+
+                                </template>
                             </div>
 
 
