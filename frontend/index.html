@@ -11,6 +11,13 @@
         content="ACS Control - Administración amigable de ONU mediante GenieACS"
     />
     <title>ACS Control</title>
+    <script>
+        // Aplica el tema guardado antes de pintar (evita el destello oscuro/claro).
+        try {
+            if (localStorage.getItem('acs-theme') === 'light')
+                document.documentElement.dataset.theme = 'light'
+        } catch (e) {}
+    </script>
 </head>
 <body>
     <div id="app"></div>

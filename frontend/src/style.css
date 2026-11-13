@@ -61,6 +61,11 @@
     --warning-soft: rgba(248, 226, 148, .09);
     --warning-border: rgba(248, 226, 148, .32);
 
+    --glow: rgba(255, 255, 255, .07);
+    --focus-ring: rgba(255, 255, 255, .06);
+    --login-card: rgba(11, 11, 13, .85);
+    --overlay: rgba(0, 0, 0, .70);
+
     --muted: var(--text-muted);
     --card-bg: var(--surface);
 
@@ -199,9 +204,24 @@ button {
 }
 
 .nav-icon {
-    width: 19px;
-    text-align: center;
-    font-size: 18px;
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+}
+
+.nav-icon svg,
+.sidebar-logout svg,
+.theme-toggle svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .soon {
@@ -682,7 +702,7 @@ tbody tr:hover {
 
     z-index: 50;
 
-    background: rgba(0, 0, 0, 0.70);
+    background: var(--overlay);
 
     backdrop-filter: blur(1px);
 }
@@ -1219,7 +1239,7 @@ tbody tr:hover {
     inset: 0;
     z-index: 100;
 
-    background: rgba(0, 0, 0, 0.70);
+    background: var(--overlay);
 
     display: flex;
     align-items: center;
@@ -1466,7 +1486,7 @@ tbody tr:hover {
 
 .wan-form-overlay {
     position:fixed;inset:0;z-index:200;
-    background:rgba(0, 0, 0, 0.70);
+    background:var(--overlay);
     display:flex;align-items:center;justify-content:center;
 }
 
@@ -3390,7 +3410,7 @@ tbody tr:hover {
 
 body {
     background:
-        radial-gradient(1200px 520px at 70% -180px, rgba(255, 255, 255, .07), transparent 70%),
+        radial-gradient(1200px 520px at 70% -180px, var(--glow), transparent 70%),
         var(--bg);
     background-attachment: fixed;
 }
@@ -3640,7 +3660,7 @@ select:focus,
 textarea:focus {
     outline: none;
     border-color: var(--text-soft) !important;
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, .06) !important;
+    box-shadow: 0 0 0 3px var(--focus-ring) !important;
 }
 
 input[type="checkbox"],
@@ -3682,7 +3702,7 @@ input[type="radio"] {
 }
 
 .login-card {
-    background: rgba(11, 11, 13, .85) !important;
+    background: var(--login-card) !important;
     border: 1px solid var(--border-strong);
     backdrop-filter: blur(8px);
 }
@@ -3745,4 +3765,127 @@ button:disabled {
 .security-level-buttons button {
     border-radius: 999px;
     font-weight: 600;
+}
+
+
+/* ==========================================================
+   MODO CLARO
+   Mismo estilo (tipografia, pildoras, acentos) sobre blanco.
+   Se activa con el boton de la barra lateral y se recuerda en
+   este navegador.
+   ========================================================== */
+
+:root[data-theme="light"] {
+    color-scheme: light;
+
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f6f6f7;
+    --surface-3: #eeeef0;
+    --nav-active: #eeeef0;
+    --sidebar-bg: #fafafa;
+
+    --border: #e7e7ea;
+    --border-strong: #d4d4d9;
+
+    --text: #0a0a0b;
+    --text-2: #26262b;
+    --text-soft: #46464e;
+    --text-muted: #6b6b75;
+    --text-faint: #9a9aa3;
+
+    /* Pildora negra con texto blanco */
+    --primary: #0a0a0b;
+    --primary-strong: #2a2a2f;
+    --primary-text: #0a0a0b;
+    --primary-soft: rgba(0, 0, 0, .05);
+    --primary-border: rgba(0, 0, 0, .22);
+    --on-accent: #ffffff;
+
+    /* Acentos de Somos, oscurecidos para leer sobre blanco */
+    --success: #0fae74;
+    --success-text: #0b8a5c;
+    --success-soft: rgba(15, 174, 116, .09);
+    --success-border: rgba(15, 174, 116, .35);
+
+    --danger: #e5384d;
+    --danger-text: #c32238;
+    --danger-soft: rgba(229, 56, 77, .08);
+    --danger-border: rgba(229, 56, 77, .32);
+
+    --warning: #b8860b;
+    --warning-text: #8a6100;
+    --warning-soft: rgba(248, 226, 148, .35);
+    --warning-border: rgba(184, 134, 11, .35);
+
+    --glow: rgba(255, 110, 231, .07);
+    --focus-ring: rgba(0, 0, 0, .07);
+    --login-card: rgba(255, 255, 255, .9);
+    --overlay: rgba(10, 10, 11, .35);
+}
+
+:root[data-theme="light"] .status-dot.online,
+:root[data-theme="light"] .inventory-status.online i {
+    background: var(--success);
+    box-shadow: 0 0 0 4px var(--success-soft);
+}
+
+:root[data-theme="light"] .nav-item.active::before {
+    background: var(--success);
+}
+
+:root[data-theme="light"] .stat-card:hover,
+:root[data-theme="light"] .device-panel {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .04) !important;
+}
+
+/* Boton de tema */
+.theme-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 10px;
+    padding: 9px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-soft);
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+}
+
+.theme-toggle:hover {
+    color: var(--text);
+    border-color: var(--text-soft);
+}
+
+.sidebar-logout {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.users-form button {
+    white-space: nowrap;
+    padding: 9px 18px !important;
+}
+
+/* Encabezado pequeño de las ventanas (Staff, Auditoria, Configuracion) */
+.audit-header small,
+.config-modal-head small {
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .14em;
+    color: var(--text-muted);
+}
+
+.users-form input,
+.users-form select {
+    min-width: 0;
+    width: 100%;
 }

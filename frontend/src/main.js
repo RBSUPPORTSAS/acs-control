@@ -60,6 +60,33 @@ createApp({
 
 // ACS_TAGS_WRITE_UI_08D
 const newTag = ref('')
+
+// Tema (oscuro por defecto). Se recuerda en este navegador.
+function readTheme() {
+    try {
+        return localStorage.getItem('acs-theme') === 'light' ? 'light' : 'dark'
+    } catch (e) {
+        return 'dark'
+    }
+}
+
+const theme = ref(readTheme())
+
+function applyTheme(value) {
+    document.documentElement.dataset.theme = value
+}
+
+applyTheme(theme.value)
+
+function toggleTheme() {
+    theme.value = theme.value === 'dark' ? 'light' : 'dark'
+    applyTheme(theme.value)
+    try {
+        localStorage.setItem('acs-theme', theme.value)
+    } catch (e) {
+        // Navegador sin almacenamiento: el tema dura hasta recargar.
+    }
+}
 const tagBusy = ref(false)
 
 // ACS_WIFI_UI_06B
@@ -3181,6 +3208,8 @@ function formatDate(value) {
             isAdmin,
             roleLabel,
             canManageNetwork,
+            theme,
+            toggleTheme,
             login,
             logout,
             usersOpen,
@@ -3446,7 +3475,7 @@ function formatDate(value) {
                             activeView = 'inicio'
                         "
                     >
-                        <span class="nav-icon">⌂</span>
+                        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg></span>
                         Inicio
                     </button>
 
@@ -3459,7 +3488,7 @@ function formatDate(value) {
                         }"
                         @click="openInventory"
                     >
-                        <span class="nav-icon">◉</span>
+                        <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M11 16.5h.01"/><path d="M8.5 9.5a5 5 0 0 1 7 0"/><path d="M5.8 6.8a9 9 0 0 1 12.4 0"/></svg></span>
                         Dispositivos
                     </button>
 
@@ -3469,7 +3498,7 @@ function formatDate(value) {
                     </div>
 
                     <button class="nav-item disabled">
-                        <span class="nav-icon">▦</span>
+                        <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span>
                         Plantillas
                         <span class="soon">Pronto</span>
                     </button>
@@ -3480,7 +3509,7 @@ function formatDate(value) {
                         class="nav-item"
                         @click="openAudit"
                     >
-                        <span class="nav-icon">↺</span>
+                        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></span>
                         Auditoría
                     </button>
 
@@ -3496,7 +3525,7 @@ function formatDate(value) {
                             class="nav-item"
                             @click="openUsers"
                         >
-                            <span class="nav-icon">👤</span>
+                            <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
                             Staff
                         </button>
 
@@ -3504,7 +3533,7 @@ function formatDate(value) {
                             class="nav-item"
                             @click="openConfig"
                         >
-                            <span class="nav-icon">⚙</span>
+                            <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span>
                             Configuración
                         </button>
 
@@ -3512,6 +3541,16 @@ function formatDate(value) {
 
                 </nav>
 
+
+                <button
+                    class="theme-toggle"
+                    :title="theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
+                    @click="toggleTheme"
+                >
+                    <svg v-if="theme === 'dark'" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+                    <svg v-else viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+                    {{ theme === 'dark' ? 'Modo claro' : 'Modo oscuro' }}
+                </button>
 
                 <div class="sidebar-user">
 
@@ -3529,7 +3568,7 @@ function formatDate(value) {
                         title="Cerrar sesión"
                         @click="logout"
                     >
-                        ⎋
+                        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
                     </button>
 
                 </div>
@@ -4535,7 +4574,7 @@ function formatDate(value) {
                     <div class="config-modal-head">
 
                         <div>
-                            <small>👤 SISTEMA</small>
+                            <small>SISTEMA</small>
                             <h2>Staff</h2>
                         </div>
 
@@ -4678,7 +4717,7 @@ function formatDate(value) {
                         <div>
 
                             <small>
-                                ⚙ SISTEMA
+                                SISTEMA
                             </small>
 
                             <h2>
