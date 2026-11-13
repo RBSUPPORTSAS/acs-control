@@ -6,6 +6,24 @@ from urllib.parse import quote
 from app.core.config import settings
 
 
+def _queued_on_timeout(func):
+    """La tarea queda guardada en GenieACS antes de que la ONU responda.
+    Si la ONU tarda mas que el cliente (p. ej. ~20-45 s por sesion en MONU
+    xPON, X_CATV o X_CMCC), no es un error: queda en cola (202) y la
+    confirmacion se hace leyendo despues, como en post_task."""
+
+    import functools
+
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except httpx.TimeoutException:
+            return {"http_status": 202, "response": None}
+
+    return wrapper
+
+
 class GenieACSClient:
 
     def __init__(self):
@@ -94,6 +112,7 @@ class GenieACSClient:
                 "response": body,
             }
 
+    @_queued_on_timeout
     async def delete_object(self, device_id, object_name):
         from urllib.parse import quote
 
@@ -123,6 +142,7 @@ class GenieACSClient:
                 "response": body,
             }
 
+    @_queued_on_timeout
     async def set_parameter_values(self, device_id, values):
         from urllib.parse import quote
 
@@ -144,6 +164,7 @@ class GenieACSClient:
 
             return {"http_status": r.status_code}
 
+    @_queued_on_timeout
     async def add_object(self, device_id, object_name):
         import httpx
         from urllib.parse import quote

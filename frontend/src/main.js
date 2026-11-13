@@ -6274,7 +6274,7 @@ function formatDate(value) {
 
                                     <!-- FIREWALL -->
 
-                                    <div
+                                    <div v-if="securityData.firewall_kind"
                                         class="
                                             security-firewall-card
                                         "

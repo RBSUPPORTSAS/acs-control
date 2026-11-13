@@ -22,7 +22,8 @@ def confirm_tries(device):
     from app.services.wan_driver import detect_wan_driver
 
     # X_CMCC (RX8414CDW) tambien tarda ~40 s.
-    return 25 if detect_wan_driver(device) in ("x_catv_wan", "cmcc") else 5
+    # El resto: hasta 30 s (MONU xPON tarda ~22 s); termina apenas confirma.
+    return 25 if detect_wan_driver(device) in ("x_catv_wan", "cmcc") else 15
 
 
 # ACS_WAN_READ_11A

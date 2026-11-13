@@ -170,20 +170,31 @@ def _cmcc(device, branch):
         return None
 
 
+# Misma rama ServiceManage con otros prefijos: X_CT-COM (MONU
+# xPON+1GE+1FE+WIFI+CATV fw V3.3.0: Telnet/FTP sin variante WAN).
+SERVICE_MANAGE = ("X_CMCC_ServiceManage", "X_CT-COM_ServiceManage")
+
+
 def cmcc_table(device):
-    node = _cmcc(device, "services")
+    info = ((device or {}).get("InternetGatewayDevice") or {}).get("DeviceInfo") or {}
 
-    if not isinstance(node, dict):
-        return {}, {}
+    for branch in SERVICE_MANAGE:
+        node = info.get(branch)
 
-    nodes, paths = {}, {}
+        if not isinstance(node, dict):
+            continue
 
-    for name, param in CMCC_MAP.items():
-        if isinstance(node.get(param), dict):
-            nodes[name] = node[param]
-            paths[name] = f"{CMCC_SERVICES}.{param}"
+        nodes, paths = {}, {}
 
-    return nodes, paths
+        for name, param in CMCC_MAP.items():
+            if isinstance(node.get(param), dict):
+                nodes[name] = node[param]
+                paths[name] = f"InternetGatewayDevice.DeviceInfo.{branch}.{param}"
+
+        if nodes:
+            return nodes, paths
+
+    return {}, {}
 
 
 def cmcc_notes(device):
@@ -481,7 +492,9 @@ def security_state(device):
         # Medio/Personalizado solo estan confirmados en Huawei; en el
         # formato numerico (VSOL) otros valores siguen como "Desconocido".
         "firewall_label": (
-            ("Encendido" if grade == 1 else "Apagado")
+            None
+            if firewall_source(device)[0] is None
+            else ("Encendido" if grade == 1 else "Apagado")
             if firewall_source(device)[0] == "cmcc"
             else firewall_label(grade)
             if firewall_source(device)[0] in ("huawei", "rz") or grade in (0, 1)
