@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 
-from app.api.deps import require_admin, require_user
+from app.api.deps import require_admin, require_network, require_user
 from app.core.config import settings
 from app.core.redaction import RedactGenieForNonAdmin
 
@@ -51,13 +51,18 @@ app.add_middleware(RedactGenieForNonAdmin)
 app.include_router(auth.router)
 app.include_router(system.router)
 
-# Cualquier usuario con sesion (admin y technical): gestion de ONUs.
+# Cualquier usuario con sesion (admin, technical y wifi): inventario,
+# informacion de la ONU, equipos conectados y Wi-Fi. Las etiquetas exigen
+# require_network dentro del router de dispositivos.
 logged_in = [Depends(require_user)]
 app.include_router(devices.router, dependencies=logged_in)
 app.include_router(wifi.router, dependencies=logged_in)
-app.include_router(catv.router, dependencies=logged_in)
-app.include_router(wan.router, dependencies=logged_in)
-app.include_router(security.router, dependencies=logged_in)
+
+# WAN, CATV y seguridad: admin y technical.
+network = [Depends(require_network)]
+app.include_router(catv.router, dependencies=network)
+app.include_router(wan.router, dependencies=network)
+app.include_router(security.router, dependencies=network)
 
 # Solo admin.
 admin_only = [Depends(require_admin)]

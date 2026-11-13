@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import SESSION_COOKIE, current_username, read_session
-from app.models.user import User
+from app.models.user import NETWORK_ROLES, User
 
 
 async def get_optional_user(
@@ -43,6 +43,17 @@ async def require_admin(
 ) -> User:
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Requiere rol admin")
+
+    return user
+
+
+async def require_network(
+    user: User = Depends(require_user),
+) -> User:
+    """WAN, CATV, seguridad y etiquetas: admin y technical (no el rol wifi)."""
+
+    if user.role not in NETWORK_ROLES:
+        raise HTTPException(status_code=403, detail="Su perfil solo permite ver la ONU y cambiar el Wi-Fi")
 
     return user
 

@@ -9,7 +9,13 @@ from app.models.base import Base
 # Roles disponibles:
 # - admin: administracion completa (configuracion, auditoria, usuarios).
 # - technical: gestion de ONUs sin acceso a datos del servidor GenieACS.
-ROLES = ("admin", "technical")
+# - wifi: soporte de primer nivel. Ve el inventario, la informacion de la
+#   ONU y los equipos conectados, y cambia el Wi-Fi. Sin WAN, CATV,
+#   seguridad ni etiquetas.
+ROLES = ("admin", "technical", "wifi")
+
+# Roles que pueden gestionar WAN, CATV, seguridad y etiquetas.
+NETWORK_ROLES = ("admin", "technical")
 
 
 class User(Base):
