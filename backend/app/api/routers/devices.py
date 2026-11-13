@@ -53,6 +53,7 @@ async def devices(
                 device.get("serial_number"),
                 device.get("software_version"),
                 device.get("oui"),
+                device.get("tr069_ip"),
             ]
 
             tags = device.get("tags") or []
@@ -124,6 +125,23 @@ async def device_detail(
         response["raw"] = device
 
     return response
+
+
+@router.get("/api/devices/{device_id}/hosts")
+async def device_hosts(device_id: str):
+    """Equipos conectados que GenieACS tiene guardados de la ONU."""
+
+    from app.services.hosts_reader import read_hosts
+
+    try:
+        device = await genieacs.get_device(device_id)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Error consultando GenieACS: {exc}")
+
+    if not device:
+        raise HTTPException(status_code=404, detail="ONU no encontrada")
+
+    return {"device": normalize_device(device), **read_hosts(device)}
 
 
 # Lectura de datos bajo demanda (solo lectura en la ONU)
