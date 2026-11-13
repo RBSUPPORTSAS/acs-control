@@ -3883,3 +3883,9 @@ button:disabled {
     letter-spacing: .14em;
     color: var(--text-muted);
 }
+
+.users-form input,
+.users-form select {
+    min-width: 0;
+    width: 100%;
+}
