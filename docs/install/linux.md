@@ -299,6 +299,8 @@ server {
         # crear una WAN puede tomar ~2 min. El valor por defecto (60 s)
         # cortaria la respuesta aunque la WAN si se cree.
         proxy_read_timeout 300s;
+        # Logo del operador (hasta 512 KB, viaja codificado en base64).
+        client_max_body_size 2m;
     }
 
     location /docs {
@@ -329,8 +331,20 @@ systemctl reload nginx
 ```bash
 curl -I http://127.0.0.1/
 curl -s http://127.0.0.1/api/health | jq .
-curl -s "http://127.0.0.1/api/devices?limit=10" | jq .
 hostname -I
+```
+
+La lista de ONUs exige sesión. Para probarla desde la terminal, inicie sesión con el
+usuario admin y reutilice la cookie:
+
+```bash
+curl -s -c /tmp/acs.cookie -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"SU_CONTRASEÑA"}' \
+  http://127.0.0.1/api/auth/login | jq .user
+
+curl -s -b /tmp/acs.cookie "http://127.0.0.1/api/devices?limit=5" | jq '.count'
+
+rm -f /tmp/acs.cookie
 ```
 
 Accesos:
@@ -339,6 +353,12 @@ Accesos:
 http://SERVER_IP/
 http://SERVER_IP/docs
 ```
+
+## 13. Primeros pasos
+
+Entre a `http://SERVER_IP/`, inicie sesión con el usuario admin y siga
+[Primeros pasos después de instalar](../INSTALL.md#primeros-pasos-después-de-instalar):
+revisar la conexión, subir el logo del operador y crear los usuarios.
 
 ## Problemas comunes
 
@@ -398,11 +418,16 @@ Debe responder `200`. Revise también `GENIEACS_NBI_URL` en `.env`.
 
 ## Actualizar ACS Control
 
+Haga antes un respaldo de la base de datos (ver [Actualizar](../INSTALL.md#actualizar)).
+
 ```bash
 cd /opt/acs-control
 git pull
 
 .venv/bin/pip install -r backend/requirements.txt
+
+# Crea las tablas nuevas, si las hay (no borra datos).
+PYTHONPATH=backend .venv/bin/python -m app.bootstrap_db
 
 cd frontend
 npm ci
@@ -414,3 +439,6 @@ cp -a /opt/acs-control/frontend/dist/. /var/www/acs-control/
 systemctl restart acs-control
 systemctl reload nginx
 ```
+
+Si el navegador sigue mostrando la versión anterior, recargue sin caché
+(Ctrl+Shift+R / Cmd+Shift+R).

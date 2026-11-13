@@ -44,7 +44,7 @@ Al terminar:
 
 ## Usuarios (Staff)
 
-ACS Control tiene dos roles:
+ACS Control tiene tres roles:
 
 | Rol | Acceso |
 |---|---|
@@ -102,6 +102,21 @@ PYTHONPATH=backend .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 &
 `npm run preview` sirve el frontend compilado y reenvía `/api` al backend
 (configurado en `frontend/vite.config.js`; para otro backend use `ACS_API_URL`).
 Para desarrollo con recarga automática use `npm run dev` (http://127.0.0.1:5173).
+
+## Actualizar
+
+```bash
+cd ~/acs-control
+~/acs-control/.run/detener.sh
+git pull
+.venv/bin/pip install -r backend/requirements.txt
+PYTHONPATH=backend .venv/bin/python -m app.bootstrap_db
+(cd frontend && npm ci && npm run build)
+~/acs-control/.run/iniciar.sh
+```
+
+Para probar una rama que todavía no está en `main` (por ejemplo un PR), cambie
+`git pull` por `git fetch origin NOMBRE_RAMA && git checkout -B NOMBRE_RAMA origin/NOMBRE_RAMA`.
 
 ## Seguridad
 
