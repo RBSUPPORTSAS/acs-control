@@ -815,6 +815,18 @@ async def edit_pppoe_wan(
             values
         )
 
+        # RT9607C: VLAN/802.1p tambien en Layer2Bridging.Marking del WCD.
+        from app.services import l2_marking
+
+        if _drv(device) == "realtek" and l2_marking.uses_marking(device):
+            await l2_marking.apply(
+                genieacs,
+                device_id,
+                wan['wan_connection_device'],
+                vlan=int(payload["vlan"]) if "vlan" in payload else None,
+                priority=int(payload["priority"]) if "priority" in payload else None,
+            )
+
         confirmed = False
 
         # Contraseña no puede leerse; confirmamos
@@ -1668,7 +1680,14 @@ async def delete_wan_wcd(
 
     x_catv = detect_wan_driver(device) == "x_catv_wan"
 
+    from app.services import l2_marking
+
     try:
+
+        # RT9607C: quitar la marca 802.1p y los filtros de puente del WCD;
+        # la ONU los deja huerfanos. Se encolan y corren con el borrado.
+        if detect_wan_driver(device) == "realtek" and l2_marking.uses_marking(device):
+            await l2_marking.remove(genieacs, device_id, device, wcd)
 
         if x_catv:
             from app.services.x_catv_wan_creator import (
@@ -1980,6 +1999,18 @@ async def edit_pppoe_wan_wcd(
             device_id,
             values
         )
+
+        # RT9607C: VLAN/802.1p tambien en Layer2Bridging.Marking del WCD.
+        from app.services import l2_marking
+
+        if _drv(device) == "realtek" and l2_marking.uses_marking(device):
+            await l2_marking.apply(
+                genieacs,
+                device_id,
+                wcd,
+                vlan=int(payload["vlan"]) if "vlan" in payload else None,
+                priority=int(payload["priority"]) if "priority" in payload else None,
+            )
 
         confirmed = False
 
@@ -2359,6 +2390,18 @@ async def edit_ip_wan_wcd(
             device_id,
             values
         )
+
+        # RT9607C: VLAN/802.1p tambien en Layer2Bridging.Marking del WCD.
+        from app.services import l2_marking
+
+        if _drv(device) == "realtek" and l2_marking.uses_marking(device):
+            await l2_marking.apply(
+                genieacs,
+                device_id,
+                wcd,
+                vlan=int(payload["vlan"]) if "vlan" in payload else None,
+                priority=int(payload["priority"]) if "priority" in payload else None,
+            )
 
         confirmed = False
 

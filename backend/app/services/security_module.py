@@ -1,3 +1,4 @@
+from app.services.device_normalizer import get_parameter
 import ipaddress
 
 BASE = (
@@ -292,6 +293,34 @@ def firewall_write(device, grade):
     return None
 
 
+def unsupported_info(device):
+    """Que se puede decir de una ONU sin firewall/servicios por TR-069.
+
+    RT9607C (fw -1.2.0.30) y RX8102WT: no tienen rama Firewall; la
+    RT9607C solo publica DeviceInfo.X_RZ_WebEnable (interfaz web).
+    """
+
+    notes = []
+    web = get_parameter(device, "InternetGatewayDevice.DeviceInfo.X_RZ_WebEnable")
+
+    if web is not None:
+        notes.append({
+            "label": "Interfaz web de la ONU",
+            "value": "Habilitada" if str(web).lower() in ("true", "1") else "Deshabilitada",
+        })
+
+    if not notes:
+        return {}
+
+    return {
+        "reason": (
+            "Este firmware no expone firewall ni control de servicios "
+            "(HTTP, HTTPS, Telnet, SSH...) por TR-069."
+        ),
+        "notes": notes,
+    }
+
+
 def security_state(device):
     acl, _paths = access_table(device)
 
@@ -302,6 +331,7 @@ def security_state(device):
             "firewall_label": None,
             "services": [],
             "tr069_protected": True,
+            **unsupported_info(device),
         }
 
     _, grade_obj = firewall_source(device)

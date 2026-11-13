@@ -366,6 +366,16 @@ def read_wan(device):
                 "protection_reason"
             )
 
+    # Realtek RT9607C: el 802.1p vive en Layer2Bridging.Marking del WCD.
+    from app.services import l2_marking
+
+    if l2_marking.uses_marking(device):
+        for item in result:
+            if item.get("priority_8021p") is None and not item.get("synthetic"):
+                item["priority_8021p"] = l2_marking.read_priority(
+                    device, item.get("wan_connection_device")
+                )
+
     # Red de seguridad para cualquier marca: la WAN cuya IP es la del
     # connection request (la que usa el ACS para hablar con la ONU) es la
     # de gestion, aunque su servicio o nombre no digan TR069.
