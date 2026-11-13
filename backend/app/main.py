@@ -14,6 +14,7 @@ from app.core.redaction import RedactGenieForNonAdmin
 
 from app.api.routers import auth
 from app.api.routers import system
+from app.api.routers import branding
 from app.api.routers import devices
 from app.api.routers import wifi
 from app.api.routers import catv
@@ -50,6 +51,8 @@ app.add_middleware(RedactGenieForNonAdmin)
 # controlan sus permisos dentro del router system.
 app.include_router(auth.router)
 app.include_router(system.router)
+# Logo del operador: ver es publico (login); cambiarlo, solo admin.
+app.include_router(branding.router)
 
 # Cualquier usuario con sesion (admin, technical y wifi): inventario,
 # informacion de la ONU, equipos conectados y Wi-Fi. Las etiquetas exigen
