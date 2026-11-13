@@ -7,6 +7,14 @@ import {
     watch
 } from 'vue/dist/vue.esm-bundler.js'
 
+import '@fontsource/outfit/300.css'
+import '@fontsource/outfit/400.css'
+import '@fontsource/outfit/500.css'
+import '@fontsource/outfit/600.css'
+import '@fontsource/barlow/500.css'
+import '@fontsource/barlow/600.css'
+import '@fontsource/barlow/700.css'
+import '@fontsource/space-mono/400.css'
 import './style.css'
 
 // ACS_TAGS_UI_08B
