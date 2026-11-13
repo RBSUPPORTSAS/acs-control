@@ -9,6 +9,8 @@ from app.core.database import get_db
 from app.services.genieacs import genieacs
 
 
+from app.api.certified import ensure_certified
+
 router = APIRouter()
 
 
@@ -80,6 +82,8 @@ async def security_module_firewall(
     device = await genieacs.get_device(
         device_id
     )
+
+    ensure_certified(device)
 
     if not device:
         raise HTTPException(
@@ -223,6 +227,8 @@ async def security_module_service(
     device = await genieacs.get_device(
         device_id
     )
+
+    ensure_certified(device)
 
     if not device:
         raise HTTPException(

@@ -107,8 +107,12 @@ async def device_detail(
             detail="ONU no encontrada",
         )
 
+    from app.services.wan_driver import certification
+
     response = {
         "device": normalize_device(device),
+        # Modelos no certificados: la interfaz oculta la gestion.
+        "certification": certification(device),
         # Si faltan datos o estan viejos, la interfaz pide leerlos a la ONU.
         "data_status": device_refresh.data_status(
             device,

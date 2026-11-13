@@ -294,6 +294,10 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        # Algunas ONU (p. ej. KM1303) tardan ~30 s por sesion TR-069:
+        # crear una WAN puede tomar ~2 min. El valor por defecto (60 s)
+        # cortaria la respuesta aunque la WAN si se cree.
+        proxy_read_timeout 300s;
     }
 
     location /docs {

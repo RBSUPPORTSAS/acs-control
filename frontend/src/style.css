@@ -3265,3 +3265,21 @@ tbody tr:hover {
         transform: rotate(360deg);
     }
 }
+
+/* Modelo no certificado: solo lectura */
+.uncertified-banner {
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid #e0b252;
+    background: #fff6e0;
+    color: #6b4a00;
+    font-size: 14px;
+}
+
+.read-only .wan-add-button,
+.read-only .wan-edit-button,
+.read-only .wan-delete-button,
+.read-only .catv-buttons {
+    display: none !important;
+}

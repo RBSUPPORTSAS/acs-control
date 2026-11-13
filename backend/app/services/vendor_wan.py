@@ -1,4 +1,4 @@
-"""WAN en ONUs que no usan X_CT-COM_*: Huawei y Realtek.
+"""WAN en ONUs que no usan X_CT-COM_*: Huawei, Realtek y X_CATV.
 
 Validado con escrituras reales (WAN de prueba en VLAN 999/998, sin
 afectar las WAN existentes):
@@ -7,7 +7,12 @@ afectar las WAN existentes):
 
 Los constructores existentes arman los valores con nombres X_CT-COM_*;
 aqui se traducen al formato de cada fabricante justo antes de enviarlos.
-Solo se usa cuando wan_driver detecta "huawei" o "realtek".
+Solo se usa cuando wan_driver detecta "huawei", "realtek" o "x_catv_wan".
+
+X_CATV (KM1303, SML-702XW, ONT1GE1FE1TV...): la VLAN y el 802.1p viven
+solo en el WCD (X_CATV_WANGponLinkConfig); el resto cambia de prefijo
+(X_CATV_ServiceList, X_CATV_LanInterface con rutas, X_CATV_IPMode).
+Validado en KM1303 70A56A54155F (fw V2.1.14).
 
 | Dato        | X_CT-COM (VSOL)        | Huawei            | Realtek              |
 |-------------|------------------------|-------------------|----------------------|
@@ -117,6 +122,18 @@ VENDORS = {
         },
         "interfaces": lanbind_values,
     },
+    "x_catv": {
+        "rename": {
+            "X_CT-COM_ServiceList": ("X_CATV_ServiceList", "xsd:string"),
+            "X_CT-COM_IPMode": ("X_CATV_IPMode", "xsd:unsignedInt"),
+        },
+        # En la conexion no hay VLAN: va en X_CATV_WANGponLinkConfig.
+        "drop": {"X_CT-COM_VLANIDMark", "X_CT-COM_802-1pMark"},
+        "link": "X_CATV_WANGponLinkConfig",
+        "interfaces": lambda conn_base, value: [
+            [f"{conn_base}.X_CATV_LanInterface", value, "xsd:string"]
+        ],
+    },
     "realtek": {
         "rename": {
             "X_CT-COM_VLANIDMark": ("X_RTK_VlanId", "xsd:int"),
@@ -127,6 +144,12 @@ VENDORS = {
 }
 
 
+def vendor_of(driver):
+    """Driver de wan_driver -> clave de VENDORS."""
+
+    return "x_catv" if driver == "x_catv_wan" else driver
+
+
 def translate(values, vendor="huawei"):
     """Valores X_CT-COM_* -> nombres del fabricante. Lo demas se descarta."""
 
@@ -135,11 +158,22 @@ def translate(values, vendor="huawei"):
 
     for path, value, value_type in values:
         if "WANGponLinkConfig" in path:
+            if spec.get("link"):
+                out.append([
+                    path.replace("X_CT-COM_WANGponLinkConfig", spec["link"]),
+                    value,
+                    value_type,
+                ])
             continue
 
         conn_base, name = path.rsplit(".", 1)
 
-        if name in DROP:
+        if name in spec.get("rename", {}):
+            new_name, new_type = spec["rename"][name]
+            out.append([f"{conn_base}.{new_name}", value, new_type])
+            continue
+
+        if name in DROP or name in spec.get("drop", ()):
             continue
 
         if name == "X_CT-COM_LanInterface":
@@ -148,11 +182,6 @@ def translate(values, vendor="huawei"):
 
         if name == "X_CT-COM_ServiceList" and vendor == "realtek":
             out.append([f"{conn_base}.X_RTK_ServiceType", rtk_service_type(value), "xsd:int"])
-            continue
-
-        if name in spec["rename"]:
-            new_name, new_type = spec["rename"][name]
-            out.append([f"{conn_base}.{new_name}", value, new_type])
             continue
 
         out.append([path, value, value_type])
