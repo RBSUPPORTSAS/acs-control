@@ -6,8 +6,9 @@ ACS Control provides a normalized API and web interface for managing heterogeneo
 
 ## Features
 
-- Device inventory and Online/Offline status
-- Search by serial, manufacturer, model, firmware, OUI and Tags
+- Device inventory with Online/Offline status and the TR-069 management IP of each ONU
+- Search by serial, manufacturer, model, firmware, IP, OUI and Tags
+- Connected hosts per ONU (name, IP, MAC, LAN port or Wi-Fi band), when the ONU reports them
 - Tag management
 - Wi-Fi management
 - CATV control
@@ -17,6 +18,8 @@ ACS Control provides a normalized API and web interface for managing heterogeneo
 - Device firewall and remote-management controls
 - Audit log (con el usuario que hizo cada cambio)
 - Login con roles: admin (administración), technical (gestión de ONUs) y wifi (soporte: ver la ONU, sus equipos y cambiar el Wi-Fi)
+- Operator logo (uploaded by admin) and dark / light theme
+- Validated ONU models: see [docs/MODELOS.md](docs/MODELOS.md)
 - REST API with FastAPI/OpenAPI
 - Vue 3 web interface
 - PostgreSQL and Redis
@@ -35,7 +38,7 @@ Read [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) before changing device-managem
 
 Modelos de ONU compatibles y qué se probó en cada uno: [docs/MODELOS.md](docs/MODELOS.md)
 
-Guías por plataforma: [docs/INSTALL.md](docs/INSTALL.md)
+Instalación paso a paso, primeros pasos y actualización: [docs/INSTALL.md](docs/INSTALL.md)
 
 - [Linux (Debian 12/13, Ubuntu 22.04/24.04)](docs/install/linux.md): producción con systemd y Nginx.
 - [Proxmox VE (contenedor LXC)](docs/install/proxmox-lxc.md): producción.
