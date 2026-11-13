@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     redis_port: int = 6379
     redis_db: int = 0
 
+    # Sesiones
+    session_hours: int = 12
+    # True cuando ACS Control se sirve por HTTPS (la cookie solo viaja cifrada).
+    session_cookie_secure: bool = False
+
     # Logging
     log_level: str = "INFO"
 
