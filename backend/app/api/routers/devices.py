@@ -12,6 +12,8 @@ from app.core.database import get_db
 from app.services.audit_service import add_audit
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
+from app.core.config import settings
+from app.services import device_refresh
 
 
 router = APIRouter()
@@ -107,12 +109,72 @@ async def device_detail(
 
     response = {
         "device": normalize_device(device),
+        # Si faltan datos o estan viejos, la interfaz pide leerlos a la ONU.
+        "data_status": device_refresh.data_status(
+            device,
+            max_age=settings.refresh_max_age_minutes * 60,
+        ),
     }
 
     if raw:
         response["raw"] = device
 
     return response
+
+
+# Lectura de datos bajo demanda (solo lectura en la ONU)
+
+@router.post("/api/devices/{device_id}/refresh")
+async def device_refresh_request(device_id: str, force: bool = False):
+    """Pide a la ONU las ramas que faltan o estan viejas.
+
+    force=true las vuelve a leer todas aunque esten al dia.
+    """
+
+    try:
+        device = await genieacs.get_device(device_id)
+
+        if not device:
+            raise HTTPException(status_code=404, detail="ONU no encontrada")
+
+        max_age = 0 if force else settings.refresh_max_age_minutes * 60
+        result = await device_refresh.request_refresh(device_id, device, max_age=max_age)
+
+    except HTTPException:
+        raise
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"No fue posible pedir la lectura a GenieACS: {exc}",
+        )
+
+    return result
+
+
+@router.get("/api/devices/{device_id}/refresh")
+async def device_refresh_state(device_id: str):
+    """Lecturas pendientes, fallidas y estado de los datos."""
+
+    try:
+        state = await device_refresh.refresh_status(device_id)
+        device = await genieacs.get_device(device_id)
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"No fue posible consultar GenieACS: {exc}",
+        )
+
+    if not device:
+        raise HTTPException(status_code=404, detail="ONU no encontrada")
+
+    state["data_status"] = device_refresh.data_status(
+        device,
+        max_age=settings.refresh_max_age_minutes * 60,
+    )
+
+    return state
 
 
 # ACS_TAG_WRITE_08C
