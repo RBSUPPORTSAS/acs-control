@@ -1,6 +1,6 @@
 """Realtek / OPTICTIMES (IGD, RT9607C, RX8102WT): WAN, proteccion y seguridad.
 
-Estructura tomada de la IGD 94026B-IGD-4F505449556E1F25 (fw V15.4.7).
+Estructura tomada de una IGD (fw V15.4.7).
 """
 
 import pytest

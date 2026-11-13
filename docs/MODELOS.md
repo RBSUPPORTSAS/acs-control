@@ -3,7 +3,7 @@
 Esta lista dice qué modelos funcionan con ACS-Control sobre GenieACS y qué se probó en cada uno.
 Se actualiza con cada modelo nuevo que se valida.
 
-Última actualización: 2026-11-11 (GenieACS 10.15.50.14: V2804AX30-H y ZTE F6600P certificado).
+Última actualización: 2026-11-11 (V2804AX30-H y ZTE F6600P certificado).
 
 ## Cómo leer esta tabla
 

@@ -1,6 +1,6 @@
 """X_CMCC (RX8414CDW fw V02.01.02): WAN, seguridad y proteccion TR-069.
 
-Estructura tomada de la RX8414CDW OPTI000002E4 (laboratorio), anonimizada.
+Estructura tomada de una RX8414CDW de laboratorio, anonimizada.
 Todas las WAN (tambien la TR-069) son conexiones del mismo WCD 1 y los
 booleanos llegan como texto "TRUE"/"FALSE".
 """

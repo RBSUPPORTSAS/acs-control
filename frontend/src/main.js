@@ -689,6 +689,7 @@ const manufacturerOptions = computed(() => {
             USUARIO_ACTIVAR: 'Usuario activado',
             USUARIO_DESACTIVAR: 'Usuario desactivado',
             USUARIO_ELIMINAR: 'Usuario eliminado',
+            MARCA_LOGO: 'Logo del operador',
             ETIQUETA_AGREGAR: 'Etiqueta agregada',
             ETIQUETA_QUITAR: 'Etiqueta quitada',
             WIFI_EDITAR: 'Wi-Fi editado',
@@ -721,7 +722,7 @@ const manufacturerOptions = computed(() => {
         }
 
         function auditTargetType(type) {
-            return { SESION: 'Sesión', USUARIO: 'Usuario', ONU: 'ONU' }[type] || type || '-'
+            return { SESION: 'Sesión', USUARIO: 'Usuario', ONU: 'ONU', SISTEMA: 'Sistema' }[type] || type || '-'
         }
 
         async function setAuditFilter(value) {
@@ -3172,7 +3173,101 @@ function formatDate(value) {
         }
 
 
+        // Logo del operador (reemplaza la "A"). Publico: el login lo muestra.
+        const branding = ref({ logo: false, logo_version: null })
+        const logoUrl = computed(() =>
+            branding.value.logo
+                ? `/api/branding/logo?v=${branding.value.logo_version || ''}`
+                : null
+        )
+        const logoBusy = ref(false)
+        const logoMessage = ref('')
+        const logoError = ref(false)
+
+        async function loadBranding() {
+            try {
+                const r = await fetch('/api/branding', { cache: 'no-store' })
+                if (r.ok)
+                    branding.value = await r.json()
+            } catch (e) {
+                // Sin servidor: queda la "A" de ACS Control.
+            }
+        }
+
+        function readFileBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader()
+                reader.onload = () => resolve(String(reader.result).split(',')[1] || '')
+                reader.onerror = () => reject(new Error('No se pudo leer el archivo.'))
+                reader.readAsDataURL(file)
+            })
+        }
+
+        async function uploadLogo(event) {
+            const input = event.target
+            const file = input.files && input.files[0]
+            input.value = ''
+
+            if (!file)
+                return
+
+            logoMessage.value = ''
+            logoError.value = false
+
+            if (file.size > 512 * 1024) {
+                logoError.value = true
+                logoMessage.value = 'El logo pesa más de 512 KB.'
+                return
+            }
+
+            logoBusy.value = true
+
+            try {
+                const r = await fetch('/api/branding/logo', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        content_type: file.type,
+                        data: await readFileBase64(file),
+                    }),
+                })
+                const data = await r.json().catch(() => ({}))
+
+                if (!r.ok)
+                    throw new Error(data.detail || `HTTP ${r.status}`)
+
+                branding.value = data
+                logoMessage.value = 'Logo actualizado.'
+            } catch (e) {
+                logoError.value = true
+                logoMessage.value = e.message || 'No fue posible subir el logo.'
+            } finally {
+                logoBusy.value = false
+            }
+        }
+
+        async function removeLogo() {
+            logoBusy.value = true
+            logoMessage.value = ''
+            logoError.value = false
+
+            try {
+                const r = await fetch('/api/branding/logo', { method: 'DELETE' })
+                if (!r.ok)
+                    throw new Error(`HTTP ${r.status}`)
+                branding.value = await r.json()
+                logoMessage.value = 'Se restauró el logo de ACS Control.'
+            } catch (e) {
+                logoError.value = true
+                logoMessage.value = 'No fue posible quitar el logo.'
+            } finally {
+                logoBusy.value = false
+            }
+        }
+
         onMounted(async () => {
+
+            loadBranding()
 
             try {
                 const r = await fetch('/api/auth/me', { cache: 'no-store' })
@@ -3210,6 +3305,13 @@ function formatDate(value) {
             canManageNetwork,
             theme,
             toggleTheme,
+            branding,
+            logoUrl,
+            logoBusy,
+            logoMessage,
+            logoError,
+            uploadLogo,
+            removeLogo,
             login,
             logout,
             usersOpen,
@@ -3390,7 +3492,12 @@ function formatDate(value) {
 
             <form class="login-card" @submit.prevent="login">
 
-                <div class="login-brand">
+                <div v-if="logoUrl" class="login-logo">
+                    <img :src="logoUrl" alt="Logo" />
+                    <small>ACS Control · Gestión de ONUs</small>
+                </div>
+
+                <div v-else class="login-brand">
                     <div class="brand-icon">A</div>
                     <div>
                         <strong>ACS Control</strong>
@@ -3442,7 +3549,12 @@ function formatDate(value) {
 
             <aside class="sidebar">
 
-                <div class="brand">
+                <div v-if="logoUrl" class="brand brand-custom">
+                    <img :src="logoUrl" alt="Logo" class="brand-logo" />
+                    <div class="brand-subtitle">ACS Control · Gestión TR-069</div>
+                </div>
+
+                <div v-else class="brand">
                     <div class="brand-icon">
                         A
                     </div>
@@ -4759,6 +4871,59 @@ function formatDate(value) {
                     <template
                         v-else-if="systemConfig"
                     >
+
+                        <div class="config-section">
+
+                            <div class="config-title">
+                                Logo del operador
+                            </div>
+
+                            <div class="logo-editor">
+
+                                <div class="logo-preview">
+                                    <img v-if="logoUrl" :src="logoUrl" alt="Logo actual" />
+                                    <div v-else class="brand-icon">A</div>
+                                </div>
+
+                                <div class="logo-actions">
+                                    <p>
+                                        Reemplaza la "A" en el inicio de sesión y en la barra lateral.
+                                        PNG, JPG, WEBP o SVG de hasta 512 KB. Se ve mejor un logo
+                                        horizontal con fondo transparente.
+                                    </p>
+
+                                    <div class="logo-buttons">
+                                        <label class="logo-upload" :class="{ disabled: logoBusy }">
+                                            {{ logoBusy ? 'Guardando…' : (logoUrl ? 'Cambiar logo' : 'Subir logo') }}
+                                            <input
+                                                type="file"
+                                                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                                                :disabled="logoBusy"
+                                                @change="uploadLogo"
+                                            />
+                                        </label>
+
+                                        <button
+                                            v-if="logoUrl"
+                                            class="logo-remove"
+                                            :disabled="logoBusy"
+                                            @click="removeLogo"
+                                        >
+                                            Quitar logo
+                                        </button>
+                                    </div>
+
+                                    <small
+                                        v-if="logoMessage"
+                                        :class="logoError ? 'text-red' : 'text-green'"
+                                    >
+                                        {{ logoMessage }}
+                                    </small>
+                                </div>
+
+                            </div>
+
+                        </div>
 
                         <div
                             class="config-section"

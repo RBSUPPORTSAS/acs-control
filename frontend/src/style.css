@@ -3889,3 +3889,130 @@ button:disabled {
     min-width: 0;
     width: 100%;
 }
+
+
+/* ==========================================================
+   LOGO DEL OPERADOR
+   ========================================================== */
+
+.brand-custom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.brand-logo {
+    display: block;
+    max-width: 190px;
+    max-height: 48px;
+    object-fit: contain;
+}
+
+.login-logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 26px;
+}
+
+.login-logo img {
+    max-width: 240px;
+    max-height: 72px;
+    object-fit: contain;
+}
+
+.login-logo small {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.logo-editor {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+}
+
+.logo-preview {
+    width: 200px;
+    height: 90px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--border-strong);
+    border-radius: 12px;
+    background: var(--surface-2);
+}
+
+.logo-preview img {
+    max-width: 170px;
+    max-height: 64px;
+    object-fit: contain;
+}
+
+.logo-actions p {
+    margin: 0 0 10px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.logo-buttons {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.logo-upload {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 18px;
+    border-radius: 999px;
+    background: var(--primary);
+    color: var(--on-accent);
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.logo-upload.disabled {
+    opacity: .6;
+    cursor: wait;
+}
+
+.logo-upload input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.logo-remove {
+    padding: 8px 18px;
+    border-radius: 999px;
+    border: 1px solid var(--danger-border);
+    background: transparent;
+    color: var(--danger-text);
+    font-size: 13px;
+}
+
+@media (max-width: 700px) {
+    .logo-editor {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+.config-test-button {
+    border-radius: 999px !important;
+    background: transparent !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text) !important;
+    font-weight: 600;
+}
+
+.config-test-button:hover:not(:disabled) {
+    border-color: var(--text) !important;
+}

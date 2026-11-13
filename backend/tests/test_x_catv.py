@@ -1,6 +1,6 @@
 """X_CATV (KM1303, SML-702XW, ONT1GE1FE1TV...): crear, editar y borrar WAN.
 
-Estructura tomada de la KM1303 70A56A54155F (fw V2.1.14), anonimizada.
+Estructura tomada de la una KM1303 (fw V2.1.14), anonimizada.
 Lo validado en la ONU real:
 - La WAN TR-069 (VLAN 46) no se publica: solo en X_CATV_WANIndex.
 - Lista un WCD "fantasma" (enlace con "" y conexiones sin valores);

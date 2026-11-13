@@ -1,7 +1,7 @@
 """RT9607C (OPTICTIMES, fw -1.2.0.30): 802.1p en Layer2Bridging, CATV
 X_RZ_Catv y seguridad sin firewall.
 
-Estructura tomada de la RT9607C 4F50544939D5027D (laboratorio), anonimizada.
+Estructura tomada de la una RT9607C de laboratorio (laboratorio), anonimizada.
 """
 
 import copy

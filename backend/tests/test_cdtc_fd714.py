@@ -1,6 +1,6 @@
 """CDTC FD714GS3-R851 (fw V3.3.14) y FD714GS1-R850 (fw V4.3.4).
 
-Vistos en el GenieACS 10.15.50.6:
+Vistos en un GenieACS de prueba:
 - Su preset solo declara la IP de la WAN: la rama WANDevice existe con
   _timestamp en la raiz pero sus sub-objetos nunca se recorrieron, y
   ACS-Control la daba por completa (WAN sin VLAN, sin nombre, driver generic).

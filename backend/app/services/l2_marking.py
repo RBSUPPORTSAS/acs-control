@@ -10,7 +10,7 @@ copia de la VLAN) vive en una marca de Layer2Bridging que apunta al WCD:
 
 La interfaz web de la ONU crea esa marca al configurar el 802.1p; al
 crear una WAN por TR-069 la ONU registra el WCD en AvailableInterface
-pero no crea la marca. Validado en 4F50544939D5027D: addObject Marking +
+pero no crea la marca. Validado en una RT9607C de laboratorio: addObject Marking +
 setParameterValues, la ONU la guarda igual que la de su interfaz web.
 """
 
