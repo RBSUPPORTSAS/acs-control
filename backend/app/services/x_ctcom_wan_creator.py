@@ -1,10 +1,51 @@
 import asyncio
 
 from app.services.x_ctcom_wan_builder import (
+    build_enable_values,
     build_link_values,
     build_pppoe_values,
     build_dhcp_values,
 )
+
+
+async def finish_connection(client, device_id, wcd, container, instance, data):
+    """Ultimos pasos, comunes a todas las WAN nuevas.
+
+    1. Reescribe la VLAN del enlace (WCD). En algunas ONUs (p. ej.
+       HG102DWT) X_CT-COM_VLANMode de la conexion y el Mode del enlace son
+       el mismo campo: escribir VLANMode=1 en la conexion deja el enlace en
+       Mode 1 y la VLAN no se etiqueta. El enlace se escribe al final para
+       que quede en Mode 2, como las WAN que funcionan. En VSOL son campos
+       independientes y esto no cambia nada.
+       Antes se relee el enlace desde la ONU: GenieACS no envia un valor
+       que su cache ya tiene, y su cache aun dice Mode 2 aunque la ONU lo
+       haya cambiado sola.
+    2. Enciende la conexion. Se crea apagada para configurarla completa
+       antes de que levante.
+    """
+
+    await client.post_task(
+        device_id,
+        {
+            "name": "refreshObject",
+            "objectName": (
+                "InternetGatewayDevice.WANDevice.1."
+                f"WANConnectionDevice.{wcd}.X_CT-COM_WANGponLinkConfig"
+            ),
+        },
+        connection_request=True,
+        wait_ms=10000,
+    )
+
+    await client.set_parameter_values(
+        device_id,
+        build_link_values(wcd, data),
+    )
+
+    await client.set_parameter_values(
+        device_id,
+        build_enable_values(wcd, container, instance),
+    )
 
 
 def wcd_numbers(device):
@@ -220,6 +261,10 @@ async def create_x_ctcom_pppoe(
         config["parameter_values"],
     )
 
+    await finish_connection(
+        client, device_id, wcd, "WANPPPConnection", instance, data,
+    )
+
     return {
         "status": 200,
         "driver": "x_ctcom_wan",
@@ -235,7 +280,16 @@ async def create_x_ctcom_dhcp(
     client,
     device_id,
     data,
+    mode="DHCP",
 ):
+    mode = str(mode).upper()
+
+    if mode not in ("DHCP", "STATIC"):
+        raise ValueError("Tipo valido: DHCP o STATIC")
+
+    # Validar antes de crear objetos en la ONU.
+    build_dhcp_values(0, 0, data, mode=mode)
+
     wcd, reused = await get_or_create_wcd(
         client,
         device_id,
@@ -288,11 +342,16 @@ async def create_x_ctcom_dhcp(
         wcd,
         instance,
         data,
+        mode=mode,
     )
 
     await client.set_parameter_values(
         device_id,
         config["parameter_values"],
+    )
+
+    await finish_connection(
+        client, device_id, wcd, "WANIPConnection", instance, data,
     )
 
     return {
