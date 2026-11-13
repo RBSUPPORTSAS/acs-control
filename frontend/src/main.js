@@ -6981,7 +6981,7 @@ function formatDate(value) {
                                                 <strong>
                                                     {{
                                                         connection.priority_8021p
-                                                        ?? '-'
+                                                        ?? 'Sin marcar'
                                                     }}
                                                 </strong>
                                             </div>

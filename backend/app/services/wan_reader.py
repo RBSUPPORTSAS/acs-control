@@ -211,6 +211,16 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
     if priority is None:
         priority = field(obj, "X_CMCC_802-1pMark")  # X_CMCC (RX8414CDW)
 
+    # 802.1p valido: 0-7. Varias ONU (230825, KM1303) reportan 4294967295
+    # (0xFFFFFFFF = "sin marcar") o -1: no es una prioridad.
+    if isinstance(priority, bool) or not isinstance(priority, int) or not 0 <= priority <= 7:
+        try:
+            priority = int(priority)
+        except (TypeError, ValueError):
+            priority = None
+        if priority is not None and not 0 <= priority <= 7:
+            priority = None
+
     lan_binding = field(
         obj,
         "X_CT-COM_LanInterface"
