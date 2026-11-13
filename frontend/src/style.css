@@ -4004,3 +4004,15 @@ button:disabled {
         align-items: flex-start;
     }
 }
+
+.config-test-button {
+    border-radius: 999px !important;
+    background: transparent !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text) !important;
+    font-weight: 600;
+}
+
+.config-test-button:hover:not(:disabled) {
+    border-color: var(--text) !important;
+}
