@@ -42,6 +42,9 @@ BRANCHES = {
         # CDTC FD714 (GS1-R850, GS3-R851): ACL de servicios y CATV.
         "X_CT-COM_Security",
         "X_CMS_Services",
+        # ZTE F6600P: Telnet y FTP.
+        "X_ZTE-COM_Telnet",
+        "X_ZTE-COM_FTP",
     ),
     "Device": (
         "DeviceInfo",
@@ -53,13 +56,19 @@ BRANCHES = {
 }
 
 # Ramas grandes que en modo liviano se piden por sub-objetos.
-SPLITTABLE = {"WANDevice", "LANDevice", "WiFi", "Hosts", "IP", "PPP"}
+SPLITTABLE = {"DeviceInfo", "WANDevice", "LANDevice", "WiFi", "Hosts", "IP", "PPP"}
 
 # Una rama se considera completa si al menos este porcentaje de sus
 # parametros tiene valor.
 COMPLETE_RATIO = 0.95
 
 TASK_NAME = "refreshObject"
+
+# Parametro estandar bajo una rama raiz que no suele venir en el inform.
+DISCOVERY_PARAM = {
+    "InternetGatewayDevice": "InternetGatewayDevice.Layer3Forwarding.DefaultConnectionService",
+    "Device": "Device.IP.InterfaceNumberOfEntries",
+}
 
 LIGHT_KEY = "acs:refresh_light:{}"
 LIGHT_TTL = 7 * 24 * 3600
@@ -126,7 +135,7 @@ def branch_state(node):
     """Cuantos parametros tiene la rama, cuantos con valor y el mas reciente."""
 
     params = values = 0
-    unwalked = 0
+    unwalked = walked = 0
     newest = None
     stack = [node]
 
@@ -141,7 +150,9 @@ def branch_state(node):
                     if ts and (newest is None or ts > newest):
                         newest = ts
             else:
-                if not child.get("_timestamp"):
+                if child.get("_timestamp"):
+                    walked += 1
+                else:
                     unwalked += 1
                 stack.append(child)
 
@@ -151,7 +162,10 @@ def branch_state(node):
         # sin recorrer: un preset que declara rutas sueltas (p. ej. la IP
         # de la WAN en el inform) crea la rama con solo esos valores y
         # parece completa (CDTC FD714 en el GenieACS 10.15.50.6).
-        "structure": bool(node.get("_timestamp")) and unwalked == 0,
+        # Leida por partes (modo liviano), la raiz queda sin _timestamp
+        # aunque todos sus sub-objetos se recorrieron (VSOL V2804AX30-H:
+        # DeviceInfo completa da too_many_commits).
+        "structure": unwalked == 0 and (bool(node.get("_timestamp")) or walked > 0),
         "params": params,
         "values": values,
         "newest": newest,
@@ -315,6 +329,20 @@ async def request_refresh(device_id, device, max_age=None, connection_request=Tr
 
     pending = _pending_refreshes(await genieacs.get_tasks(device_id))
     pending_names = [str(t.get("objectName") or "").rstrip(".") for t in pending]
+
+    # GenieACS no conoce todas las ramas raiz de esta ONU (la raiz no tiene
+    # _timestamp): sin ellas no se piden Layer3Forwarding, X_HW_Security...
+    # Un getParameterValues de un parametro bajo la raiz obliga a GenieACS a
+    # listar la raiz primero; si el parametro no existe no hay fault.
+    root = data_root(device)
+    if root and not device[root].get("_timestamp") and not pending:
+        code = await genieacs.post_task(
+            device_id,
+            {"name": "getParameterValues", "parameterNames": [DISCOVERY_PARAM[root]]},
+            connection_request=connection_request,
+        )
+        if code == 200:
+            device = await genieacs.get_device(device_id) or device
 
     def covered(branch):
         return any(branch == p or branch.startswith(p + ".") for p in pending_names)

@@ -141,6 +141,10 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
 
     if kind == "WANPPPConnection":
         access_type = field(obj, "TransportType") or "PPPoE"
+        # VSOL V2804AX30-H reporta TransportType "L2TP" en una PPPoE normal
+        # (ConnectionType PPPoE_Routed).
+        if "PPPOE" in str(conn_type or "").upper():
+            access_type = "PPPoE"
     else:
         access_type = addressing or "IP"
 
@@ -168,6 +172,12 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
     if services in (None, ""):
         services = field(obj, "X_CMCC_ServiceList")  # RX8414CDW, ZC-500W
 
+    if services in (None, ""):
+        # ZTE (F6600P): "TR069_VoIP", "INTERNET".
+        zte = field(obj, "X_ZTE-COM_ServiceList")
+        if isinstance(zte, str):
+            services = ",".join(x.upper() for x in zte.replace("_", ",").split(","))
+
     # Segun el fabricante, la VLAN/802.1p viven en la conexion
     # (X_CT-COM_VLANIDMark, VSOL) o en el WCD: X_CATV_WANGponLinkConfig
     # o X_CT-COM_WANGponLinkConfig (p. ej. HG102DWT).
@@ -194,6 +204,9 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
     if vlan is None:
         vlan = field(obj, "X_CMCC_VLANIDMark")  # X_CMCC (RX8414CDW)
 
+    if vlan is None and field(obj, "X_ZTE-COM_VLANEnable") is not False:
+        vlan = field(obj, "X_ZTE-COM_VLANID")  # ZTE (F6600P)
+
     priority = field(obj, "X_CT-COM_802-1pMark")
 
     if priority is None:
@@ -210,6 +223,9 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
 
     if priority is None:
         priority = field(obj, "X_CMCC_802-1pMark")  # X_CMCC (RX8414CDW)
+
+    if priority is None:
+        priority = field(obj, "X_ZTE-COM_8021P")  # ZTE (F6600P)
 
     # 802.1p valido: 0-7. Varias ONU (230825, KM1303) reportan 4294967295
     # (0xFFFFFFFF = "sin marcar") o -1: no es una prioridad.
@@ -285,7 +301,11 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
         "addressing_type": addressing,
         "ip": external_ip,
         "subnet_mask": field(obj, "SubnetMask"),
-        "gateway": field(obj, "DefaultGateway"),
+        # PPPoE sin DefaultGateway (VSOL V2804AX30-H): el gateway es el
+        # extremo remoto del enlace PPP.
+        "gateway": field(obj, "DefaultGateway") or (
+            field(obj, "RemoteIPAddress") if kind == "WANPPPConnection" else None
+        ),
         "dns": field(obj, "DNSServers"),
 
         "services": services,

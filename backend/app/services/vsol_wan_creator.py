@@ -164,6 +164,14 @@ async def create_vsol_ip(client, device_id, data, state):
         config["parameter_values"]
     )
 
+    # PASO 6: encender, ya configurada. Antes quedaba apagada y la interfaz
+    # no tiene como encenderla (ver HG102DWT, PR #6). Validado en
+    # V2804AX30-H 80F1A8C4D08D.
+    await client.set_parameter_values(
+        device_id,
+        [[f"{wan_base}.Enable", True, "xsd:boolean"]]
+    )
+
     return {
         "wcd": wcd,
         "instance": instance,
@@ -278,10 +286,16 @@ async def create_vsol_pppoe(client, device_id, data, state):
         config["link_values"]
     )
 
-    # 4. Configurar PPPoE, siempre apagada
+    # 4. Configurar PPPoE (se escribe apagada)
     await client.set_parameter_values(
         device_id,
         config["parameter_values"]
+    )
+
+    # 5. Encender, ya configurada.
+    await client.set_parameter_values(
+        device_id,
+        [[f"{wcd_base}.WANPPPConnection.{instance}.Enable", True, "xsd:boolean"]]
     )
 
     return {

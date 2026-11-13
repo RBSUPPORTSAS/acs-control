@@ -28,6 +28,10 @@ def detect_wan_driver(device):
     if cmcc_wan(device):
         return "cmcc"
 
+    # 0d. ZTE (F6600P): X_ZTE-COM_VLANID / X_ZTE-COM_8021P en la conexion.
+    if zte_wan(device):
+        return "zte"
+
     # 1. Arquitectura X_CATV
     # VLAN/802.1p viven en X_CATV_WANGponLinkConfig.
     for index, wcd in wcds.items():
@@ -120,7 +124,7 @@ def realtek_wan(device):
 REALTEK_CREATE_MSG = "En esta ONU usa la creación estándar de WAN"
 
 # Drivers cuyas WAN se crean y editan con app.services.vendor_wan.
-VENDOR_DRIVERS = ("huawei", "realtek", "cmcc")
+VENDOR_DRIVERS = ("huawei", "realtek", "cmcc", "zte")
 
 
 def cmcc_wan(device):
@@ -138,6 +142,25 @@ def cmcc_wan(device):
         for kind in ("WANIPConnection", "WANPPPConnection"):
             for inst, conn in (wcd.get(kind) or {}).items():
                 if str(inst).isdigit() and isinstance(conn, dict) and "X_CMCC_VLANIDMark" in conn:
+                    return True
+
+    return False
+
+
+def zte_wan(device):
+    """True si las WAN usan X_ZTE-COM_VLANID (ZTE F6600P, fw V9.0.10)."""
+
+    try:
+        wcds = device["InternetGatewayDevice"]["WANDevice"]["1"]["WANConnectionDevice"]
+    except Exception:
+        return False
+
+    for index, wcd in (wcds or {}).items():
+        if not str(index).isdigit() or not isinstance(wcd, dict):
+            continue
+        for kind in ("WANIPConnection", "WANPPPConnection"):
+            for inst, conn in (wcd.get(kind) or {}).items():
+                if str(inst).isdigit() and isinstance(conn, dict) and "X_ZTE-COM_VLANID" in conn:
                     return True
 
     return False

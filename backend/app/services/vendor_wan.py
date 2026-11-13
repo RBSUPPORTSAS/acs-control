@@ -157,6 +157,20 @@ VENDORS = {
             [f"{conn_base}.X_CMCC_LanInterface", value, "xsd:string"]
         ],
     },
+    # ZTE F6600P (fw V9.0.10P6N44): VLAN/802.1p/servicios con prefijo
+    # X_ZTE-COM_ en la conexion; la VLAN solo se etiqueta con VLANEnable.
+    # No expone por TR-069 como asociar puertos a una WAN (PortBinding vacio).
+    "zte": {
+        "rename": {
+            "X_CT-COM_VLANIDMark": ("X_ZTE-COM_VLANID", "xsd:unsignedInt"),
+            "X_CT-COM_802-1pMark": ("X_ZTE-COM_8021P", "xsd:unsignedInt"),
+            "X_CT-COM_ServiceList": ("X_ZTE-COM_ServiceList", "xsd:string"),
+        },
+        "also": {
+            "X_ZTE-COM_VLANID": [("X_ZTE-COM_VLANEnable", True, "xsd:boolean")],
+        },
+        "interfaces": lambda conn_base, value: _no_interfaces(value),
+    },
     # RX8102WT (fw V1.9.2.0-220715): 802.1p en VlanPriMark de la conexion.
     "realtek_vpm": {
         "rename": {
@@ -166,6 +180,14 @@ VENDORS = {
         "interfaces": rtk_lan_interface,
     },
 }
+
+
+def _no_interfaces(value):
+    if str(value or "").strip():
+        raise ValueError(
+            "Este modelo no permite asociar puertos LAN/WiFi a una WAN por TR-069"
+        )
+    return []
 
 
 def vendor_of(driver):
@@ -225,6 +247,8 @@ def translate(values, vendor="huawei"):
             new_name, new_type = spec["rename"][name]
             value = spec.get("force", {}).get(new_name, value)
             out.append([f"{conn_base}.{new_name}", value, new_type])
+            for extra, extra_value, extra_type in spec.get("also", {}).get(new_name, ()):
+                out.append([f"{conn_base}.{extra}", extra_value, extra_type])
             continue
 
         if name in DROP or name in spec.get("drop", ()):
@@ -313,9 +337,10 @@ async def create_vendor_wan(client, device_id, data, mode="DHCP", vendor="huawei
     previous = wcd_numbers(device)
     key = vendor_for(device, vendor)
 
-    if vendor == "cmcc":
-        # RX8414CDW: addObject de WANConnectionDevice da cwmp.9002; todas
-        # las WAN (tambien la TR-069) son conexiones del mismo WCD.
+    if vendor in ("cmcc", "zte"):
+        # RX8414CDW y ZTE F6600P: addObject de WANConnectionDevice da
+        # cwmp.9002; todas las WAN (tambien la TR-069) son conexiones del
+        # mismo WCD.
         wcd, instance = await _add_connection_in_wcd(client, device_id, device, container)
     else:
         await client.add_object(
@@ -338,7 +363,7 @@ async def create_vendor_wan(client, device_id, data, mode="DHCP", vendor="huawei
     # Huawei la crea encendida en VLAN 1; Realtek apagada, en bridge y VLAN 0.
     # Se lee para que GenieACS conozca sus parametros y se configura.
     # (X_CMCC ya la leyo al crearla: se ahorra una sesion de ~40 s.)
-    if vendor != "cmcc":
+    if vendor not in ("cmcc", "zte"):
         await client.post_task(
             device_id,
             {"name": "refreshObject", "objectName": f"{base_wcd(wcd)}.{container}.{instance}"},
