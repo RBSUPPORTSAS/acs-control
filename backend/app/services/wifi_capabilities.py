@@ -1,3 +1,5 @@
+from app.services.wifi_writer import detect_band
+
 def unwrap(v):
     if isinstance(v, dict):
         return v.get("_value")
@@ -57,21 +59,7 @@ def wifi_capabilities(device):
             obj.get("Standard")
         )
 
-        rfband = unwrap(
-            obj.get("RFBand")
-        )
-
-        if str(rfband) == "1":
-            band = "5 GHz"
-        elif str(rfband) == "0":
-            band = "2.4 GHz"
-        elif standard and (
-            "a" in str(standard).lower()
-            or "ac" in str(standard).lower()
-        ):
-            band = "5 GHz"
-        else:
-            band = "2.4 GHz"
+        band = detect_band(obj)
 
         writable = walk(obj)
 

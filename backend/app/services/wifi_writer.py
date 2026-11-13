@@ -57,16 +57,24 @@ def detect_band(obj):
     if "a" in tokens or "ac" in tokens:
         return "5 GHz"
 
-    channel = unwrap(obj.get("ChannelsInUse"))
+    for name in ("ChannelsInUse", "Channel"):
+        try:
+            channel = int(str(unwrap(obj.get(name))).split(",")[0])
+        except Exception:
+            continue
 
-    try:
-        channel = int(str(channel).split(",")[0])
-    except Exception:
-        channel = 0
+        if channel > 14:
+            return "5 GHz"
 
-    if channel > 14:
+        if channel > 0:
+            return "2.4 GHz"
+
+    band = str(unwrap(obj.get("OperatingFrequencyBand")) or "").lower()
+
+    if band.startswith("5"):
         return "5 GHz"
 
+    # X_CT-COM_RFBand no sirve: VSOL usa 0 = 2.4 GHz y CDTC FD714 0 = 5 GHz.
     return "2.4 GHz"
 
 

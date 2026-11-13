@@ -28,6 +28,15 @@ CATV_PROFILES = (
         "on_value": True,
         "off_value": False,
     },
+    {
+        # CDTC FD714GS1-R850 / FD714GS3-R851 (fw V4.3.4 / V3.3.14).
+        "driver": "x_cms_services",
+        "parameter": "InternetGatewayDevice.X_CMS_Services.CatvService.Enable",
+        "support_parameter": None,
+        "value_type": "xsd:boolean",
+        "on_value": True,
+        "off_value": False,
+    },
 )
 
 # Mediciones de solo lectura que se muestran junto al estado.
@@ -37,6 +46,7 @@ CATV_METRICS = (
     ("InternetGatewayDevice.X_RZ_Catv.OutputLevel", "Nivel de salida RF"),
     ("InternetGatewayDevice.X_RZ_Catv.AGCLow", "AGC mínimo"),
     ("InternetGatewayDevice.X_RZ_Catv.AGCHigh", "AGC máximo"),
+    ("InternetGatewayDevice.X_CMS_Services.CatvService.Status", "Estado del servicio"),
 )
 
 

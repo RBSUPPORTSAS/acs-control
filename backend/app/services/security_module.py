@@ -67,6 +67,17 @@ SERVICES = {
 }
 
 
+SERVICES_LABEL = {
+    "HTTP": "HTTP",
+    "HTTPS": "HTTPS",
+    "SSH": "SSH",
+    "TELNET": "Telnet",
+    "FTP": "FTP",
+    "TFTP": "TFTP",
+    "ICMP": "Ping",
+}
+
+
 def unwrap(value):
     if isinstance(value, dict):
         return value.get("_value")
@@ -210,6 +221,114 @@ def cmcc_notes(device):
     ]
 
 
+# CDTC FD714 (GS1-R850 fw V4.3.4, GS3-R851 fw V3.3.14): X_CT-COM_Security.ACL.{i}
+# es una regla con Interface (WAN/LAN), Mode (Permit), Servics (lista
+# "WEB,HTTPS,PING"; el nombre trae ese error de la ONU) y rango StartIP-EndIP.
+# Por ahora solo lectura: una regla puede mezclar varios servicios y no se
+# ha validado en laboratorio que pasa al desactivarla.
+CTCOM_ACL_SERVICES = {
+    "WEB": "HTTP",
+    "HTTP": "HTTP",
+    "HTTPS": "HTTPS",
+    "PING": "ICMP",
+    "ICMP": "ICMP",
+    "TELNET": "TELNET",
+    "SSH": "SSH",
+    "FTP": "FTP",
+    "TFTP": "TFTP",
+}
+ANY_RANGE = ("", "0.0.0.0-255.255.255.255", "0.0.0.0-0.0.0.0")
+
+
+def ctcom_acl_rules(device):
+    try:
+        table = device["InternetGatewayDevice"]["X_CT-COM_Security"]["ACL"]
+    except Exception:
+        return []
+
+    rules = []
+
+    for index, node in sorted(
+        ((k, v) for k, v in (table or {}).items() if str(k).isdigit() and isinstance(v, dict)),
+        key=lambda item: int(item[0]),
+    ):
+        services = [
+            CTCOM_ACL_SERVICES.get(x.strip().upper(), x.strip().upper())
+            for x in str(unwrap(node.get("Servics")) or unwrap(node.get("Services")) or "").split(",")
+            if x.strip()
+        ]
+        start = str(unwrap(node.get("StartIP")) or "")
+        end = str(unwrap(node.get("EndIP")) or "")
+
+        rules.append({
+            "index": int(index),
+            "interface": str(unwrap(node.get("Interface")) or "").upper(),
+            "mode": str(unwrap(node.get("Mode")) or "").lower(),
+            "enabled": to_bool(node.get("Enable")),
+            "services": services,
+            "range": f"{start}-{end}" if start or end else "",
+        })
+
+    return rules
+
+
+def ctcom_table(device):
+    nodes = {}
+
+    for rule in ctcom_acl_rules(device):
+        side = {"WAN": "Wan", "LAN": "Lan"}.get(rule["interface"])
+
+        if not side:
+            continue
+
+        allowed = rule["enabled"] and rule["mode"] == "permit"
+
+        for svc in rule["services"]:
+            if svc not in RZ_SERVICES:
+                continue
+
+            name = f"{svc}{side}Enable"
+            current = nodes.get(name, {}).get("_value", False)
+            nodes[name] = {"_value": current or allowed, "_writable": False}
+
+            if allowed and side == "Wan" and rule["range"] not in ANY_RANGE:
+                nodes[f"{svc}WanSpecificIp"] = {"_value": rule["range"], "_writable": False}
+
+    return nodes
+
+
+def ctcom_notes(device):
+    rules = ctcom_acl_rules(device)
+
+    if not rules:
+        return []
+
+    notes = []
+
+    for rule in rules:
+        names = ", ".join(SERVICES_LABEL.get(s, s) for s in rule["services"]) or "-"
+        origin = (
+            "cualquier IP"
+            if rule["range"] in ANY_RANGE
+            else rule["range"]
+        )
+        state = (
+            "Permitido" if rule["mode"] == "permit" else rule["mode"].capitalize()
+        ) if rule["enabled"] else "Regla desactivada"
+
+        notes.append({
+            "label": f"Regla {rule['index']} ({rule['interface'] or '?'}): {names}",
+            "value": f"{state} desde {origin}" if rule["enabled"] else state,
+        })
+
+    notes.append({
+        "label": "Edición",
+        "value": "Solo lectura en este modelo (reglas ACL de X_CT-COM_Security)",
+    })
+
+    return notes
+
+
 def rz_rules(device):
     """{"WAN": (ruta, nodo), "LAN": (ruta, nodo)} de X_RZ_ServiceControl."""
 
@@ -257,6 +376,10 @@ def access_table(device):
 
     if not rules:
         nodes, paths = cmcc_table(device)
+
+        if not nodes:
+            nodes, paths = ctcom_table(device), {}
+
         return (nodes or None), paths
 
     nodes, paths = {}, {}
@@ -504,7 +627,7 @@ def security_state(device):
         "firewall_kind": firewall_source(device)[0],
 
         # Estado de otras protecciones (solo lectura).
-        "notes": cmcc_notes(device),
+        "notes": cmcc_notes(device) + ctcom_notes(device),
 
         "firewall_writable":
             writable(grade_obj),
