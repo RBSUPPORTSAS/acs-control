@@ -1,6 +1,6 @@
 """RX8102WT (Realtek, fw V1.9.2.0-220715): 802.1p en VlanPriMark.
 
-Estructura tomada de la RX8102WT 94026B9848D2 (laboratorio), anonimizada.
+Estructura tomada de una RX8102WT de laboratorio, anonimizada.
 """
 
 import copy

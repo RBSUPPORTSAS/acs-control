@@ -20,7 +20,7 @@ CATV_PROFILES = (
     },
     {
         # Realtek / OPTICTIMES (RT9607C, IGD, RX8102WT).
-        # Validado en RT9607C 4F50544939D5027D.
+        # Validado en una RT9607C de laboratorio.
         "driver": "x_rz_catv",
         "parameter": "InternetGatewayDevice.X_RZ_Catv.RF_Enable",
         "support_parameter": None,

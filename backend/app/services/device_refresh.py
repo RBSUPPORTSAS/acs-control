@@ -82,7 +82,7 @@ SESSION_CUT = {"session_terminated", "timeout", "session_timeout"}
 
 # Firmwares que ya se sabe que cortan sesiones largas: se leen por partes
 # desde el primer intento y se omiten las partes que nunca responden.
-# Validado en XPON+2GE+2WIFI+USB+CATV 1234574546B0A4AC0 (2026-11-11).
+# Validado en una XPON+2GE+2WIFI+USB+CATV (2026-11-11).
 KNOWN_HEAVY = {
     "V2.1.00-230825": ("InternetGatewayDevice.LANDevice.1.Hosts",),
 }
@@ -161,7 +161,7 @@ def branch_state(node):
         # Sin el, GenieACS nunca recorrio esa rama. Basta un sub-objeto
         # sin recorrer: un preset que declara rutas sueltas (p. ej. la IP
         # de la WAN en el inform) crea la rama con solo esos valores y
-        # parece completa (CDTC FD714 en el GenieACS 10.15.50.6).
+        # parece completa (CDTC FD714 en un GenieACS de prueba).
         # Leida por partes (modo liviano), la raiz queda sin _timestamp
         # aunque todos sus sub-objetos se recorrieron (VSOL V2804AX30-H:
         # DeviceInfo completa da too_many_commits).

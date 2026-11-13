@@ -12,9 +12,9 @@ def v(value):
 
 def test_ip_tr069_desde_connection_request_url():
     d = {"_id": "X", "InternetGatewayDevice": {"ManagementServer": {
-        "ConnectionRequestURL": v("http://10.24.3.238:58000/b9c8d6"),
+        "ConnectionRequestURL": v("http://192.0.2.38:58000/b9c8d6"),
     }}}
-    assert normalize_device(d)["tr069_ip"] == "10.24.3.238"
+    assert normalize_device(d)["tr069_ip"] == "192.0.2.38"
     assert "InternetGatewayDevice.ManagementServer.ConnectionRequestURL" in NORMALIZE_PROJECTION
     assert normalize_device({"_id": "Y"})["tr069_ip"] is None
 

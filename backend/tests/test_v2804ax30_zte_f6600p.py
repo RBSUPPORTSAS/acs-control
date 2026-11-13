@@ -1,4 +1,4 @@
-"""Modelos del GenieACS 10.15.50.14: VSOL V2804AX30-H (fw V1.1.00) y
+"""Modelos vistos en un GenieACS de prueba: VSOL V2804AX30-H (fw V1.1.00) y
 ZTE F6600P (fw V9.0.10P6N44).
 
 - V2804AX30-H: PPPoE con TransportType "L2TP" y sin DefaultGateway;
@@ -6,7 +6,7 @@ ZTE F6600P (fw V9.0.10P6N44).
   nueva llega sin la lista de ramas raiz; FireWallGrade vacio.
 - F6600P: VLAN/802.1p/servicios en X_ZTE-COM_*; todas las WAN en el WCD 1
   (addObject de WCD da cwmp.9002); Telnet/FTP propios; nivel de firewall
-  en solo lectura. Validado en ZTEGDCEF5AB1 (2026-11-11).
+  en solo lectura. Validado en una ONU en servicio (2026-11-11).
 """
 
 import pytest

@@ -1,6 +1,6 @@
 """Crear WAN en ONUs X_CATV (KM1303, SML-702XW, ONT1GE1FE1TV...).
 
-Validado con escrituras reales en KM1303 70A56A54155F (fw V2.1.14),
+Validado con escrituras reales en una KM1303 (fw V2.1.14),
 WAN de prueba en VLAN 999/998, sin tocar la WAN de internet ni la de
 gestion.
 

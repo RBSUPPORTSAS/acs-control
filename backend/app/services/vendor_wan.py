@@ -2,8 +2,8 @@
 
 Validado con escrituras reales (WAN de prueba en VLAN 999/998, sin
 afectar las WAN existentes):
-- Huawei HG8145V5 HWTC364325A4 (fw V5R019C10S270).
-- Realtek/OPTICTIMES IGD 4F505449556E1F25 (fw V15.4.7).
+- Huawei HG8145V5 (fw V5R019C10S270).
+- Realtek/OPTICTIMES IGD (fw V15.4.7).
 
 Los constructores existentes arman los valores con nombres X_CT-COM_*;
 aqui se traducen al formato de cada fabricante justo antes de enviarlos.
@@ -12,7 +12,7 @@ Solo se usa cuando wan_driver detecta "huawei", "realtek", "cmcc" o "x_catv_wan"
 X_CATV (KM1303, SML-702XW, ONT1GE1FE1TV...): la VLAN y el 802.1p viven
 solo en el WCD (X_CATV_WANGponLinkConfig); el resto cambia de prefijo
 (X_CATV_ServiceList, X_CATV_LanInterface con rutas, X_CATV_IPMode).
-Validado en KM1303 70A56A54155F (fw V2.1.14).
+Validado en una KM1303 (fw V2.1.14).
 
 | Dato        | X_CT-COM (VSOL)        | Huawei            | Realtek              |
 |-------------|------------------------|-------------------|----------------------|

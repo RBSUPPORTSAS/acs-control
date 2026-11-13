@@ -1,7 +1,7 @@
 """MONU xPON+1GE+1FE+WIFI+CATV (fw V3.3.0-210624): gateway, seguridad y
 ONU lenta (~22 s por sesion).
 
-Estructura tomada de la 70B64F199BF0 (laboratorio), anonimizada.
+Estructura tomada de una ONU de laboratorio, anonimizada.
 No expone CATV por TR-069 pese al nombre del modelo.
 """
 
