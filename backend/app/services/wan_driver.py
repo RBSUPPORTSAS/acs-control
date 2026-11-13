@@ -20,6 +20,10 @@ def detect_wan_driver(device):
     if huawei_wan(device):
         return "huawei"
 
+    # 0b. Realtek: VLAN/802.1p en X_RTK_VlanId / X_RZ_802-1pMark.
+    if realtek_wan(device):
+        return "realtek"
+
     # 1. Arquitectura X_CATV
     # VLAN/802.1p viven en X_CATV_WANGponLinkConfig.
     for index, wcd in wcds.items():
@@ -85,3 +89,28 @@ def huawei_wan(device):
 
 
 HUAWEI_CREATE_MSG = "En ONUs Huawei usa la creación estándar de WAN"
+
+
+def realtek_wan(device):
+    """True si las WAN usan el modelo Realtek (X_RTK_VlanId), p. ej. IGD,
+    RT9607C, RX8102WT. La VLAN va en X_RTK_VlanId y la prioridad en
+    X_RZ_802-1pMark. Se usa app.services.vendor_wan, que traduce los
+    valores."""
+
+    try:
+        wcds = device["InternetGatewayDevice"]["WANDevice"]["1"]["WANConnectionDevice"]
+    except Exception:
+        return False
+
+    for index, wcd in (wcds or {}).items():
+        if not str(index).isdigit() or not isinstance(wcd, dict):
+            continue
+        for kind in ("WANIPConnection", "WANPPPConnection"):
+            for inst, conn in (wcd.get(kind) or {}).items():
+                if str(inst).isdigit() and isinstance(conn, dict) and "X_RTK_VlanId" in conn:
+                    return True
+
+    return False
+
+
+REALTEK_CREATE_MSG = "En esta ONU usa la creación estándar de WAN"

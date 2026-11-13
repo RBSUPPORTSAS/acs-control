@@ -1,0 +1,235 @@
+"""WAN en ONUs que no usan X_CT-COM_*: Huawei y Realtek.
+
+Validado con escrituras reales (WAN de prueba en VLAN 999/998, sin
+afectar las WAN existentes):
+- Huawei HG8145V5 HWTC364325A4 (fw V5R019C10S270).
+- Realtek/OPTICTIMES IGD 4F505449556E1F25 (fw V15.4.7).
+
+Los constructores existentes arman los valores con nombres X_CT-COM_*;
+aqui se traducen al formato de cada fabricante justo antes de enviarlos.
+Solo se usa cuando wan_driver detecta "huawei" o "realtek".
+
+| Dato        | X_CT-COM (VSOL)        | Huawei            | Realtek              |
+|-------------|------------------------|-------------------|----------------------|
+| VLAN        | X_CT-COM_VLANIDMark    | X_HW_VLAN         | X_RTK_VlanId (int)   |
+| Prioridad   | X_CT-COM_802-1pMark    | X_HW_PRI          | X_RZ_802-1pMark      |
+| Servicios   | X_CT-COM_ServiceList   | X_HW_SERVICELIST  | X_RTK_ServiceType    |
+|             |                        |                   | (mascara: 1 TR069,   |
+|             |                        |                   |  2 INTERNET, 4, 8)   |
+| Interfaces  | X_CT-COM_LanInterface  | X_HW_LANBIND.*    | X_RTK_LanInterface   |
+|             | (rutas)                | (0/1 por puerto)  | ("lan1,ssid1")       |
+"""
+
+from app.services.x_ctcom_wan_builder import (
+    base_wcd,
+    build_dhcp_values,
+    build_enable_values,
+    build_pppoe_values,
+)
+from app.services.x_ctcom_wan_creator import (
+    wait_new_connection,
+    wait_new_wcd,
+    wcd_numbers,
+)
+
+# Parametros que en estos fabricantes no existen o no aplican.
+DROP = {
+    "X_CT-COM_VLANMode",
+    "X_CT-COM_IPMode",
+    "vsName",
+    "WanName",
+}
+
+LAN_PREFIX = "InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig."
+WLAN_PREFIX = "InternetGatewayDevice.LANDevice.1.WLANConfiguration."
+
+RTK_SERVICE_BITS = {"TR069": 1, "INTERNET": 2, "OTHER": 4, "VOICE": 8}
+
+
+def _interfaces(binding_string):
+    """Rutas -> [("lan"|"ssid", "N"), ...]."""
+
+    out = []
+
+    for path in [p.strip() for p in str(binding_string or "").split(",") if p.strip()]:
+        if path.startswith(LAN_PREFIX):
+            out.append(("lan", path[len(LAN_PREFIX):]))
+        elif path.startswith(WLAN_PREFIX):
+            out.append(("ssid", path[len(WLAN_PREFIX):]))
+        else:
+            raise ValueError(f"Interfaz no reconocida: {path}")
+
+    return out
+
+
+def lanbind_values(conn_base, binding_string):
+    """Huawei: X_HW_LANBIND.Lan1..4Enable / SSID1..4Enable (1 asociada)."""
+
+    selected = set()
+
+    for kind, n in _interfaces(binding_string):
+        key = "Lan" if kind == "lan" else "SSID"
+
+        if n not in ("1", "2", "3", "4"):
+            raise ValueError(
+                f"Esta ONU Huawei solo permite asociar {key}1 a {key}4 "
+                f"por TR-069 (se pidió {key} {n})"
+            )
+
+        selected.add(f"{key}{n}Enable")
+
+    return [
+        [f"{conn_base}.X_HW_LANBIND.{name}", 1 if name in selected else 0, "xsd:unsignedInt"]
+        for name in (
+            [f"Lan{i}Enable" for i in range(1, 5)]
+            + [f"SSID{i}Enable" for i in range(1, 5)]
+        )
+    ]
+
+
+def rtk_lan_interface(conn_base, binding_string):
+    """Realtek: X_RTK_LanInterface = "lan1,lan2,ssid1"."""
+
+    value = ",".join(f"{kind}{n}" for kind, n in _interfaces(binding_string))
+    return [[f"{conn_base}.X_RTK_LanInterface", value, "xsd:string"]]
+
+
+def rtk_service_type(services):
+    mask = 0
+
+    for name in str(services or "").split(","):
+        name = name.strip().upper()
+        if not name:
+            continue
+        if name not in RTK_SERVICE_BITS:
+            raise ValueError(f"Servicio no soportado en esta ONU: {name}")
+        mask |= RTK_SERVICE_BITS[name]
+
+    return mask
+
+
+VENDORS = {
+    "huawei": {
+        "rename": {
+            "X_CT-COM_VLANIDMark": ("X_HW_VLAN", "xsd:unsignedInt"),
+            "X_CT-COM_802-1pMark": ("X_HW_PRI", "xsd:unsignedInt"),
+            "X_CT-COM_ServiceList": ("X_HW_SERVICELIST", "xsd:string"),
+        },
+        "interfaces": lanbind_values,
+    },
+    "realtek": {
+        "rename": {
+            "X_CT-COM_VLANIDMark": ("X_RTK_VlanId", "xsd:int"),
+            "X_CT-COM_802-1pMark": ("X_RZ_802-1pMark", "xsd:unsignedInt"),
+        },
+        "interfaces": rtk_lan_interface,
+    },
+}
+
+
+def translate(values, vendor="huawei"):
+    """Valores X_CT-COM_* -> nombres del fabricante. Lo demas se descarta."""
+
+    spec = VENDORS[vendor]
+    out = []
+
+    for path, value, value_type in values:
+        if "WANGponLinkConfig" in path:
+            continue
+
+        conn_base, name = path.rsplit(".", 1)
+
+        if name in DROP:
+            continue
+
+        if name == "X_CT-COM_LanInterface":
+            out.extend(spec["interfaces"](conn_base, value))
+            continue
+
+        if name == "X_CT-COM_ServiceList" and vendor == "realtek":
+            out.append([f"{conn_base}.X_RTK_ServiceType", rtk_service_type(value), "xsd:int"])
+            continue
+
+        if name in spec["rename"]:
+            new_name, new_type = spec["rename"][name]
+            out.append([f"{conn_base}.{new_name}", value, new_type])
+            continue
+
+        out.append([path, value, value_type])
+
+    return out
+
+
+async def create_vendor_wan(client, device_id, data, mode="DHCP", vendor="huawei"):
+    """Crea una WAN en un WCD nuevo. mode: DHCP, STATIC o PPPOE."""
+
+    mode = str(mode).upper()
+
+    if mode not in ("DHCP", "STATIC", "PPPOE"):
+        raise ValueError("Tipo valido: DHCP, STATIC o PPPOE")
+
+    container = "WANPPPConnection" if mode == "PPPOE" else "WANIPConnection"
+
+    def build(wcd, instance):
+        if mode == "PPPOE":
+            return build_pppoe_values(wcd, instance, data)
+        return build_dhcp_values(wcd, instance, data, mode=mode)
+
+    # Validar (incluida la traduccion de interfaces) antes de crear nada.
+    translate(build(0, 0)["parameter_values"], vendor)
+
+    device = await client.get_device(device_id)
+
+    if not device:
+        raise RuntimeError("ONU no encontrada")
+
+    previous = wcd_numbers(device)
+
+    await client.add_object(
+        device_id,
+        "InternetGatewayDevice.WANDevice.1.WANConnectionDevice",
+    )
+
+    wcd = await wait_new_wcd(client, device_id, previous)
+
+    if wcd is None:
+        raise RuntimeError("La ONU no confirmó el nuevo WANConnectionDevice")
+
+    await client.add_object(device_id, f"{base_wcd(wcd)}.{container}")
+
+    instance = await wait_new_connection(client, device_id, wcd, container, set())
+
+    if instance is None:
+        raise RuntimeError(f"La ONU no confirmó {container}")
+
+    # Huawei la crea encendida en VLAN 1; Realtek apagada, en bridge y VLAN 0.
+    # Se lee para que GenieACS conozca sus parametros y se configura.
+    await client.post_task(
+        device_id,
+        {"name": "refreshObject", "objectName": f"{base_wcd(wcd)}.{container}.{instance}"},
+        connection_request=True,
+        wait_ms=10000,
+    )
+
+    config = build(wcd, instance)
+
+    await client.set_parameter_values(device_id, translate(config["parameter_values"], vendor))
+    await client.set_parameter_values(device_id, build_enable_values(wcd, container, instance))
+
+    # Releer la conexion: la tarea de encendido puede seguir en cola cuando
+    # el endpoint consulta el estado, y mostraria "Disabled".
+    await client.post_task(
+        device_id,
+        {"name": "refreshObject", "objectName": f"{base_wcd(wcd)}.{container}.{instance}"},
+        connection_request=True,
+        wait_ms=10000,
+    )
+
+    return {
+        "status": 200,
+        "driver": vendor,
+        "wcd": wcd,
+        "instance": instance,
+        "name": config["name"],
+        "vlan": int(data["vlan"]),
+    }

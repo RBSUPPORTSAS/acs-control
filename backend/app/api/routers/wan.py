@@ -167,7 +167,7 @@ async def create_pppoe_wan(
         after={
             "vlan": vlan,
             "service": "INTERNET",
-            "enabled": detect_wan_driver(device) in ("x_ctcom_wan", "huawei"),
+            "enabled": detect_wan_driver(device) in ("x_ctcom_wan", "huawei", "realtek"),
         },
         result="SOLICITADO",
         message="Creando nueva WAN PPPoE",
@@ -191,14 +191,15 @@ async def create_pppoe_wan(
                 payload,
             )
 
-        elif driver == "huawei":
-            from app.services.huawei_wan import create_huawei_wan
+        elif driver in ("huawei", "realtek"):
+            from app.services.vendor_wan import create_vendor_wan
 
-            result = await create_huawei_wan(
+            result = await create_vendor_wan(
                 genieacs,
                 device_id,
                 payload,
                 mode="PPPOE",
+                vendor=driver,
             )
 
         else:
@@ -775,16 +776,11 @@ async def edit_pppoe_wan(
     )
 
     try:
-
-        # Huawei: X_CT-COM_* -> X_HW_* (VLAN, prioridad, servicios, interfaces)
-
-        from app.services.wan_driver import huawei_wan
-
-        if huawei_wan(device):
-
-            from app.services.huawei_wan import translate
-
-            values = translate(values)
+        # Huawei/Realtek: X_CT-COM_* -> nombres del fabricante
+        from app.services.wan_driver import detect_wan_driver as _drv
+        if _drv(device) in ("huawei", "realtek"):
+            from app.services.vendor_wan import translate
+            values = translate(values, _drv(device))
 
 
         await genieacs.set_parameter_values(
@@ -928,7 +924,7 @@ async def create_dhcp_wan(
     if mode == "STATIC":
         import ipaddress
 
-        if driver not in ("x_ctcom_wan", "huawei"):
+        if driver not in ("x_ctcom_wan", "huawei", "realtek"):
             raise HTTPException(
                 400,
                 "IP fija no está validada para este modelo de ONU",
@@ -952,7 +948,7 @@ async def create_dhcp_wan(
         "vlan": vlan,
         "service": "INTERNET",
         "type": label,
-        "enabled": driver in ("x_ctcom_wan", "huawei"),
+        "enabled": driver in ("x_ctcom_wan", "huawei", "realtek"),
     }
 
     if mode == "STATIC":
@@ -990,14 +986,15 @@ async def create_dhcp_wan(
                 mode=mode,
             )
 
-        elif driver == "huawei":
-            from app.services.huawei_wan import create_huawei_wan
+        elif driver in ("huawei", "realtek"):
+            from app.services.vendor_wan import create_vendor_wan
 
-            result = await create_huawei_wan(
+            result = await create_vendor_wan(
                 genieacs,
                 device_id,
                 payload,
                 mode=mode,
+                vendor=driver,
             )
 
         else:
@@ -1110,6 +1107,11 @@ async def create_vsol_ip_wan(
 
     if not device:
         raise HTTPException(404, "ONU no encontrada")
+
+    from app.services.wan_driver import REALTEK_CREATE_MSG, realtek_wan
+
+    if realtek_wan(device):
+        raise HTTPException(400, REALTEK_CREATE_MSG)
 
     from app.services.wan_driver import HUAWEI_CREATE_MSG, huawei_wan
 
@@ -1279,6 +1281,11 @@ async def create_vsol_pppoe_wan(
 
     if not device:
         raise HTTPException(404, "ONU no encontrada")
+
+    from app.services.wan_driver import REALTEK_CREATE_MSG, realtek_wan
+
+    if realtek_wan(device):
+        raise HTTPException(400, REALTEK_CREATE_MSG)
 
     from app.services.wan_driver import HUAWEI_CREATE_MSG, huawei_wan
 
@@ -1890,16 +1897,11 @@ async def edit_pppoe_wan_wcd(
     )
 
     try:
-
-        # Huawei: X_CT-COM_* -> X_HW_* (VLAN, prioridad, servicios, interfaces)
-
-        from app.services.wan_driver import huawei_wan
-
-        if huawei_wan(device):
-
-            from app.services.huawei_wan import translate
-
-            values = translate(values)
+        # Huawei/Realtek: X_CT-COM_* -> nombres del fabricante
+        from app.services.wan_driver import detect_wan_driver as _drv
+        if _drv(device) in ("huawei", "realtek"):
+            from app.services.vendor_wan import translate
+            values = translate(values, _drv(device))
 
 
         await genieacs.set_parameter_values(
@@ -2271,11 +2273,11 @@ async def edit_ip_wan_wcd(
     )
 
     try:
-        # Huawei: X_CT-COM_* -> X_HW_* (VLAN, prioridad, servicios, interfaces)
-        from app.services.wan_driver import huawei_wan
-        if huawei_wan(device):
-            from app.services.huawei_wan import translate
-            values = translate(values)
+        # Huawei/Realtek: X_CT-COM_* -> nombres del fabricante
+        from app.services.wan_driver import detect_wan_driver as _drv
+        if _drv(device) in ("huawei", "realtek"):
+            from app.services.vendor_wan import translate
+            values = translate(values, _drv(device))
 
         await genieacs.set_parameter_values(
             device_id,

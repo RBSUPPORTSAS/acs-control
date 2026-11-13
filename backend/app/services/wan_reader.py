@@ -21,6 +21,47 @@ def children(obj):
     ]
 
 
+# Realtek (IGD, RT9607C, RX8102WT): X_RTK_ServiceType es una mascara de
+# bits. Confirmado en las 14 ONUs del GenieACS: 1 en todas las WAN TR-069
+# (VLAN 46, la IP del connection request), 2 en internet.
+RTK_SERVICE_BITS = (
+    (1, "TR069"),
+    (2, "INTERNET"),
+    (4, "OTHER"),
+    (8, "VOICE"),
+)
+
+
+def rtk_services(value):
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return None
+
+    return ",".join(name for bit, name in RTK_SERVICE_BITS if value & bit) or None
+
+
+def rtk_lan_binding(obj):
+    """Realtek: X_RTK_LanInterface = "lan1,lan2,ssid1,ssid5" -> rutas."""
+
+    raw = field(obj, "X_RTK_LanInterface")
+
+    if not raw:
+        return None
+
+    paths = []
+
+    for item in str(raw).split(","):
+        item = item.strip().lower()
+
+        if item.startswith("lan") and item[3:].isdigit():
+            paths.append(f"InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.{item[3:]}")
+        elif item.startswith("ssid") and item[4:].isdigit():
+            paths.append(f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{item[4:]}")
+
+    return ",".join(paths) or None
+
+
 def huawei_lan_binding(obj):
     """Huawei: X_HW_LANBIND.Lan1Enable..SSID4Enable (1 = asociada).
 
@@ -111,6 +152,9 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
     if services in (None, ""):
         services = field(obj, "X_HW_SERVICELIST")
 
+    if services in (None, ""):
+        services = rtk_services(field(obj, "X_RTK_ServiceType"))
+
     # Segun el fabricante, la VLAN/802.1p viven en la conexion
     # (X_CT-COM_VLANIDMark, VSOL) o en el WCD: X_CATV_WANGponLinkConfig
     # o X_CT-COM_WANGponLinkConfig (p. ej. HG102DWT).
@@ -131,6 +175,9 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
     if vlan is None:
         vlan = field(obj, "X_HW_VLAN")  # Huawei
 
+    if vlan is None:
+        vlan = field(obj, "X_RTK_VlanId")  # Realtek
+
     priority = field(obj, "X_CT-COM_802-1pMark")
 
     if priority is None:
@@ -138,6 +185,9 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
 
     if priority is None:
         priority = field(obj, "X_HW_PRI")  # Huawei
+
+    if priority is None:
+        priority = field(obj, "X_RZ_802-1pMark")  # Realtek
 
     lan_binding = field(
         obj,
@@ -151,7 +201,7 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
         )
 
     if not lan_binding:
-        lan_binding = huawei_lan_binding(obj) or lan_binding
+        lan_binding = huawei_lan_binding(obj) or rtk_lan_binding(obj) or lan_binding
 
     if isinstance(services, str):
         services = [
@@ -298,6 +348,20 @@ def read_wan(device):
                 "protection_reason"
             )
 
+    # Red de seguridad para cualquier marca: la WAN cuya IP es la del
+    # connection request (la que usa el ACS para hablar con la ONU) es la
+    # de gestion, aunque su servicio o nombre no digan TR069.
+    management_ip = connection_request_host(device)
+
+    if management_ip:
+        for item in result:
+            if item.get("ip") == management_ip and not item.get("protected"):
+                item["protected"] = True
+                item["protection_reason"] = (
+                    "Esta WAN es la que usa el ACS para gestionar la ONU; "
+                    "modificarla puede perder la gestión remota."
+                )
+
     result.sort(
         key=lambda x: (
             x.get("wan_connection_device", 9999),
@@ -306,6 +370,24 @@ def read_wan(device):
     )
 
     return result
+
+
+def connection_request_host(device):
+    """IP del ConnectionRequestURL (TR-098 o TR-181), o None."""
+
+    for root in ("InternetGatewayDevice", "Device"):
+        url = field(
+            (device.get(root) or {}).get("ManagementServer") or {},
+            "ConnectionRequestURL",
+        )
+
+        if url:
+            host = str(url).split("//", 1)[-1].split("/", 1)[0]
+            host = host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+            if host and host not in ("0.0.0.0",):
+                return host
+
+    return None
 
 def friendly_bindings(device, raw):
     if not raw:
