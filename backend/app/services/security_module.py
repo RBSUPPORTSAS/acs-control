@@ -138,6 +138,67 @@ RZ_LEVEL_PATH = RZ_FIREWALL + ".X_RZ_Firewall_Level"
 RZ_SERVICES = ("HTTP", "HTTPS", "SSH", "TELNET", "FTP", "TFTP", "ICMP")
 
 
+# X_CMCC (RX8414CDW fw V02.01.02): firewall encendido/apagado en
+# X_CMCC_Security.FirewallEnable; Telnet/FTP en DeviceInfo.X_CMCC_ServiceManage
+# (TelnetEnable = servicio, TelnetWANEnable = acceso desde WAN). Las
+# contrasenas de Telnet/FTP de esa rama nunca se muestran.
+CMCC_SECURITY = "InternetGatewayDevice.X_CMCC_Security"
+CMCC_SERVICES = "InternetGatewayDevice.DeviceInfo.X_CMCC_ServiceManage"
+CMCC_MAP = {
+    "TELNETLanEnable": "TelnetEnable",
+    "TELNETWanEnable": "TelnetWANEnable",
+    "TELNETWanPort": "TelnetPort",
+    "FTPLanEnable": "FtpEnable",
+    "FTPWanPort": "FtpPort",
+}
+CMCC_NOTES = (
+    ("DoSEnable", "Protección contra DoS"),
+    ("PortScanEnable", "Protección contra escaneo de puertos"),
+    ("IPFilterInEnable", "Filtro IP de entrada"),
+    ("IPFilterOutEnable", "Filtro IP de salida"),
+    ("MacFilterEnable", "Filtro MAC"),
+    ("UrlFilterEnable", "Filtro URL"),
+)
+
+
+def _cmcc(device, branch):
+    try:
+        if branch == "security":
+            return device["InternetGatewayDevice"]["X_CMCC_Security"]
+        return device["InternetGatewayDevice"]["DeviceInfo"]["X_CMCC_ServiceManage"]
+    except Exception:
+        return None
+
+
+def cmcc_table(device):
+    node = _cmcc(device, "services")
+
+    if not isinstance(node, dict):
+        return {}, {}
+
+    nodes, paths = {}, {}
+
+    for name, param in CMCC_MAP.items():
+        if isinstance(node.get(param), dict):
+            nodes[name] = node[param]
+            paths[name] = f"{CMCC_SERVICES}.{param}"
+
+    return nodes, paths
+
+
+def cmcc_notes(device):
+    node = _cmcc(device, "security")
+
+    if not isinstance(node, dict):
+        return []
+
+    return [
+        {"label": label, "value": "Activado" if to_bool(node.get(param)) else "Desactivado"}
+        for param, label in CMCC_NOTES
+        if isinstance(node.get(param), dict)
+    ]
+
+
 def rz_rules(device):
     """{"WAN": (ruta, nodo), "LAN": (ruta, nodo)} de X_RZ_ServiceControl."""
 
@@ -184,7 +245,8 @@ def access_table(device):
     rules = rz_rules(device)
 
     if not rules:
-        return None, {}
+        nodes, paths = cmcc_table(device)
+        return (nodes or None), paths
 
     nodes, paths = {}, {}
 
@@ -241,6 +303,11 @@ def firewall_source(device):
     if isinstance(node, dict):
         return "rz", node
 
+    node = (_cmcc(device, "security") or {}).get("FirewallEnable")
+
+    if isinstance(node, dict):
+        return "cmcc", node
+
     return None, None
 
 
@@ -252,6 +319,10 @@ def firewall_grade(device):
 
     if kind in ("huawei", "rz"):
         return HUAWEI_LEVELS.get(str(unwrap(node) or "").strip().lower())
+
+    if kind == "cmcc":
+        # Firewall apagado = nivel Bajo (permite abrir servicios por WAN).
+        return 1 if to_bool(node) else 0
 
     return None
 
@@ -289,6 +360,9 @@ def firewall_write(device, grade):
 
     if kind == "rz":
         return RZ_LEVEL_PATH, HUAWEI_WRITE[grade], "xsd:string"
+
+    if kind == "cmcc":
+        return f"{CMCC_SECURITY}.FirewallEnable", grade == 1, "xsd:boolean"
 
     return None
 
@@ -407,10 +481,17 @@ def security_state(device):
         # Medio/Personalizado solo estan confirmados en Huawei; en el
         # formato numerico (VSOL) otros valores siguen como "Desconocido".
         "firewall_label": (
-            firewall_label(grade)
+            ("Encendido" if grade == 1 else "Apagado")
+            if firewall_source(device)[0] == "cmcc"
+            else firewall_label(grade)
             if firewall_source(device)[0] in ("huawei", "rz") or grade in (0, 1)
             else f"Desconocido ({grade})"
         ),
+
+        "firewall_kind": firewall_source(device)[0],
+
+        # Estado de otras protecciones (solo lectura).
+        "notes": cmcc_notes(device),
 
         "firewall_writable":
             writable(grade_obj),

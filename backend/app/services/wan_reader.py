@@ -91,13 +91,23 @@ def huawei_lan_binding(obj):
     return ",".join(paths) or None
 
 
+def text_bool(value):
+    """Algunos firmwares (X_CMCC, ZY704) reportan booleanos como texto
+    "TRUE"/"FALSE"; se convierten para que "FALSE" no cuente como activo."""
+
+    if isinstance(value, str) and value.strip().lower() in ("true", "false"):
+        return value.strip().lower() == "true"
+
+    return value
+
+
 def read_connection(obj, wcd, instance, kind, wcd_obj=None):
 
     conn_type = field(obj, "ConnectionType")
     addressing = field(obj, "AddressingType")
 
     raw_status = field(obj, "ConnectionStatus")
-    enabled = field(obj, "Enable")
+    enabled = text_bool(field(obj, "Enable"))
     external_ip = field(obj, "ExternalIPAddress")
     ppp_session = field(obj, "PPPoESessionID")
 
@@ -155,6 +165,9 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
     if services in (None, ""):
         services = rtk_services(field(obj, "X_RTK_ServiceType"))
 
+    if services in (None, ""):
+        services = field(obj, "X_CMCC_ServiceList")  # RX8414CDW, ZC-500W
+
     # Segun el fabricante, la VLAN/802.1p viven en la conexion
     # (X_CT-COM_VLANIDMark, VSOL) o en el WCD: X_CATV_WANGponLinkConfig
     # o X_CT-COM_WANGponLinkConfig (p. ej. HG102DWT).
@@ -178,6 +191,9 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
     if vlan is None:
         vlan = field(obj, "X_RTK_VlanId")  # Realtek
 
+    if vlan is None:
+        vlan = field(obj, "X_CMCC_VLANIDMark")  # X_CMCC (RX8414CDW)
+
     priority = field(obj, "X_CT-COM_802-1pMark")
 
     if priority is None:
@@ -192,6 +208,9 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
     if priority is None:
         priority = field(obj, "VlanPriMark")  # Realtek (RX8102WT)
 
+    if priority is None:
+        priority = field(obj, "X_CMCC_802-1pMark")  # X_CMCC (RX8414CDW)
+
     lan_binding = field(
         obj,
         "X_CT-COM_LanInterface"
@@ -202,6 +221,11 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
             obj,
             "X_CATV_LanInterface"
         )
+
+    if not lan_binding:
+        cmcc_binding = field(obj, "X_CMCC_LanInterface")
+        if cmcc_binding is not None:
+            lan_binding = cmcc_binding
 
     if not lan_binding:
         lan_binding = huawei_lan_binding(obj) or rtk_lan_binding(obj) or lan_binding
@@ -234,7 +258,7 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
         "vlan": vlan,
         "priority_8021p": priority,
 
-        "nat": field(obj, "NATEnabled"),
+        "nat": text_bool(field(obj, "NATEnabled")),
 
         "username": (
             field(obj, "Username")

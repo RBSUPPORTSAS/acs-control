@@ -10,6 +10,7 @@ from app.services.genieacs import genieacs
 
 
 from app.api.certified import ensure_certified
+from app.api.routers.wan import confirm_tries
 
 router = APIRouter()
 
@@ -144,7 +145,8 @@ async def security_module_firewall(
         confirmed = False
         current = None
 
-        for _ in range(5):
+        # X_CMCC / X_CATV tardan ~40 s por sesion: esperar mas.
+        for _ in range(confirm_tries(device)):
 
             await asyncio.sleep(2)
 
@@ -300,7 +302,8 @@ async def security_module_service(
         confirmed = False
         current_service = None
 
-        for _ in range(5):
+        # X_CMCC / X_CATV tardan ~40 s por sesion: esperar mas.
+        for _ in range(confirm_tries(device)):
 
             await asyncio.sleep(2)
 
