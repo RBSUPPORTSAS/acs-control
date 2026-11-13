@@ -46,7 +46,8 @@ def catv_metrics(device):
     for path, label in CATV_METRICS:
         value = get_parameter(device, path)
 
-        if value is None:
+        # Sin modulo RF o con RF apagado algunas ONU reportan "".
+        if value is None or value == "":
             continue
 
         if isinstance(value, bool):

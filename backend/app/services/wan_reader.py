@@ -187,7 +187,10 @@ def read_connection(obj, wcd, instance, kind, wcd_obj=None):
         priority = field(obj, "X_HW_PRI")  # Huawei
 
     if priority is None:
-        priority = field(obj, "X_RZ_802-1pMark")  # Realtek
+        priority = field(obj, "X_RZ_802-1pMark")  # Realtek (IGD)
+
+    if priority is None:
+        priority = field(obj, "VlanPriMark")  # Realtek (RX8102WT)
 
     lan_binding = field(
         obj,

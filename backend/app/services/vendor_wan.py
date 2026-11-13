@@ -141,6 +141,14 @@ VENDORS = {
         },
         "interfaces": rtk_lan_interface,
     },
+    # RX8102WT (fw V1.9.2.0-220715): 802.1p en VlanPriMark de la conexion.
+    "realtek_vpm": {
+        "rename": {
+            "X_CT-COM_VLANIDMark": ("X_RTK_VlanId", "xsd:int"),
+            "X_CT-COM_802-1pMark": ("VlanPriMark", "xsd:unsignedInt"),
+        },
+        "interfaces": rtk_lan_interface,
+    },
 }
 
 
@@ -148,6 +156,35 @@ def vendor_of(driver):
     """Driver de wan_driver -> clave de VENDORS."""
 
     return "x_catv" if driver == "x_catv_wan" else driver
+
+
+def vendor_for(device, driver):
+    """Como vendor_of, pero mira la ONU: las Realtek RX8102WT guardan el
+    802.1p en VlanPriMark en vez de X_RZ_802-1pMark."""
+
+    vendor = vendor_of(driver)
+
+    if vendor == "realtek" and _has_conn_param(device, "VlanPriMark"):
+        return "realtek_vpm"
+
+    return vendor
+
+
+def _has_conn_param(device, name):
+    wcds = (
+        (device or {}).get("InternetGatewayDevice", {})
+        .get("WANDevice", {}).get("1", {}).get("WANConnectionDevice", {})
+    )
+
+    for key, wcd in wcds.items():
+        if not str(key).isdigit() or not isinstance(wcd, dict):
+            continue
+        for container in ("WANIPConnection", "WANPPPConnection"):
+            for inst, conn in (wcd.get(container) or {}).items():
+                if str(inst).isdigit() and isinstance(conn, dict) and name in conn:
+                    return True
+
+    return False
 
 
 def translate(values, vendor="huawei"):
@@ -180,7 +217,7 @@ def translate(values, vendor="huawei"):
             out.extend(spec["interfaces"](conn_base, value))
             continue
 
-        if name == "X_CT-COM_ServiceList" and vendor == "realtek":
+        if name == "X_CT-COM_ServiceList" and vendor in ("realtek", "realtek_vpm"):
             out.append([f"{conn_base}.X_RTK_ServiceType", rtk_service_type(value), "xsd:int"])
             continue
 
@@ -213,6 +250,7 @@ async def create_vendor_wan(client, device_id, data, mode="DHCP", vendor="huawei
         raise RuntimeError("ONU no encontrada")
 
     previous = wcd_numbers(device)
+    key = vendor_for(device, vendor)
 
     await client.add_object(
         device_id,
@@ -242,7 +280,7 @@ async def create_vendor_wan(client, device_id, data, mode="DHCP", vendor="huawei
 
     config = build(wcd, instance)
 
-    await client.set_parameter_values(device_id, translate(config["parameter_values"], vendor))
+    await client.set_parameter_values(device_id, translate(config["parameter_values"], key))
     await client.set_parameter_values(device_id, build_enable_values(wcd, container, instance))
 
     # Releer la conexion: la tarea de encendido puede seguir en cola cuando
