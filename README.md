@@ -33,6 +33,8 @@ Read [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) before changing device-managem
 
 ## Installation
 
+Modelos de ONU compatibles y qué se probó en cada uno: [docs/MODELOS.md](docs/MODELOS.md)
+
 Guías por plataforma: [docs/INSTALL.md](docs/INSTALL.md)
 
 - [Linux (Debian 12/13, Ubuntu 22.04/24.04)](docs/install/linux.md): producción con systemd y Nginx.
