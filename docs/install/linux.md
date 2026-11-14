@@ -91,6 +91,10 @@ PONG
 
 ## 4. Crear PostgreSQL
 
+Genera una contraseña aleatoria, crea el usuario y la base de datos, y muestra la
+contraseña. Ejecute los pasos 4 y 5 **en la misma terminal**: el paso 5 usa la
+variable `DBPASS` para escribirla en `.env`.
+
 ```bash
 DBPASS="$(openssl rand -hex 24)"
 
@@ -100,19 +104,51 @@ runuser -u postgres -- psql \
 runuser -u postgres -- createdb \
   -O acs_control_app \
   acs_control
+
+echo "Contraseña de la base de datos: $DBPASS"
 ```
 
-Conserve temporalmente `DBPASS` para configurar `.env`.
+Si cerró la terminal y perdió la contraseña, genere otra y asígnela al usuario:
+
+```bash
+DBPASS="$(openssl rand -hex 24)"
+runuser -u postgres -- psql -c "ALTER ROLE acs_control_app PASSWORD '$DBPASS';"
+echo "Contraseña de la base de datos: $DBPASS"
+```
 
 ## 5. Configurar `.env`
 
+Copia la plantilla y completa automáticamente la clave secreta, la contraseña de la
+base de datos y la dirección de GenieACS (cambie `GENIEACS_SERVER` por la IP o el
+nombre de su GenieACS):
+
 ```bash
+cd /opt/acs-control
 cp .env.example .env
-openssl rand -hex 32
+
+GENIE="http://GENIEACS_SERVER:7557"
+
+sed -i \
+  -e "s|^APP_SECRET_KEY=.*|APP_SECRET_KEY=\"$(openssl rand -hex 32)\"|" \
+  -e "s|^GENIEACS_NBI_URL=.*|GENIEACS_NBI_URL=\"$GENIE\"|" \
+  -e "s|^DATABASE_URL=.*|DATABASE_URL=\"postgresql+asyncpg://acs_control_app:$DBPASS@127.0.0.1:5432/acs_control\"|" \
+  .env
+
+chmod 600 .env
+grep -E '^(APP_SECRET_KEY|GENIEACS_NBI_URL|DATABASE_URL)=' .env
+```
+
+El último comando debe mostrar las tres líneas con valores reales (sin `CHANGE_ME` ni
+`GENIEACS_HOST`). Si `DATABASE_URL` muestra `acs_control_app:@`, la variable `DBPASS`
+estaba vacía: vuelva al paso 4 (el bloque "Si cerró la terminal").
+
+Para revisar o ajustar el resto de valores:
+
+```bash
 nano .env
 ```
 
-Ejemplo:
+Referencia de un `.env` completo:
 
 ```env
 APP_NAME="ACS Control"
@@ -134,12 +170,6 @@ REDIS_PORT=6379
 REDIS_DB=0
 
 LOG_LEVEL="INFO"
-```
-
-Proteja el archivo:
-
-```bash
-chmod 600 .env
 ```
 
 Nunca publique el `.env` real.
