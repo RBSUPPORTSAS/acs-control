@@ -201,6 +201,7 @@ Probado el 2026-11-11 en una ONU en servicio, con autorización del supervisor (
 | Asociar puertos LAN/WiFi a una WAN | ❌ El firmware no lo expone por TR-069 (`X_ZTE-COM_PortBinding` vacío); ACS-Control lo rechaza con un mensaje. |
 | WiFi 2.4 y 5 GHz | ✅ (reescritura del SSID) |
 | Telnet y FTP (LAN) encender / apagar | ✅ `X_ZTE-COM_Telnet.Enable`, `X_ZTE-COM_FTP.Enable` |
+| Equipos conectados con señal Wi-Fi | 👁 RSSI, SNR, ruido, velocidades, modo (11n/11ac) y ancho de canal desde `WLANConfiguration.{i}.AssociatedDevice` |
 | Nivel de firewall | 👁 `Firewall.Config` (Low/Middle/High), solo lectura. |
 | CATV | — |
 

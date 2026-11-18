@@ -10,6 +10,13 @@ Campos por fabricante vistos:
 - ZTE F6600P: X_ZTE-COM_OnlineDuration, X_ZTE-COM_RxRate / TxRate.
 - VSOL V2804AX30-H: OnlineTime, PowerLevel (dBm), up/downLinkNegotiationRate.
 - TR-181: Device.Hosts.Host.{i}.PhysAddress, Layer1Interface.
+
+Señal Wi-Fi: WLANConfiguration.{i}.AssociatedDevice.{j} (TR-098) o
+WiFi.AccessPoint.{i}.AssociatedDevice.{j} (TR-181), cruzado por MAC.
+- ZTE F6600P: AssociatedDeviceRssi / X_ZTE-COM_RSSI (dBm), X_ZTE-COM_SNR,
+  X_ZTE-COM_Noise, X_ZTE-COM_TxRate / RxRate (kbps), X_ZTE-COM_WorkingMode
+  (11n/11ac), X_ZTE-COM_ClientChannelWidth, X_ZTE-COM_AssociatedDeviceName.
+- VSOL V2804AX30-H: AssociatedDevice sin señal; la señal viene en Hosts.PowerLevel.
 """
 
 from datetime import datetime
@@ -89,6 +96,87 @@ def _interface(device, path, kind):
     return path or None
 
 
+# Parametros de señal (dBm) por fabricante, en orden de preferencia.
+RSSI_KEYS = (
+    "AssociatedDeviceRssi", "X_ZTE-COM_RSSI", "X_ZTE-COM_SignalStrength",
+    "X_HW_RSSI", "X_CT-COM_RSSI", "X_CMCC_RSSI", "X_RTK_RSSI", "RSSI",
+    "SignalStrength", "PowerLevel",
+)
+# Velocidades de enlace en kbps (TR-098 / ZTE).
+TX_KBPS = ("X_ZTE-COM_TxRate", "LastDataTransmitRate", "AssociatedDeviceRate", "LastDataDownlinkRate")
+RX_KBPS = ("X_ZTE-COM_RxRate", "LastDataReceiveRate", "LastDataUplinkRate")
+
+
+def signal_quality(dbm):
+    """Calificacion del RSSI para el tecnico (umbrales habituales de Wi-Fi)."""
+
+    if dbm is None:
+        return None
+    if dbm >= -55:
+        return {"level": "excelente", "label": "Excelente"}
+    if dbm >= -67:
+        return {"level": "buena", "label": "Buena"}
+    if dbm >= -75:
+        return {"level": "regular", "label": "Regular"}
+    return {"level": "debil", "label": "Débil"}
+
+
+def _mbps(kbps):
+    value = _to_int(kbps)
+    if value is None or value <= 0:
+        return None
+    return round(value / 1000) if value >= 1000 else value
+
+
+def _dbm(value):
+    dbm = _to_int(value)
+    # Algunas ONU reportan 0 o valores positivos cuando no hay dato.
+    return dbm if dbm is not None and -120 < dbm < 0 else None
+
+
+def associated_devices(device):
+    """{mac: datos de la asociacion Wi-Fi} desde AssociatedDevice."""
+
+    out = {}
+
+    def add(node, band, wlan_path):
+        mac = str(_v(node, "AssociatedDeviceMACAddress", "X_ZTE-COM_MACAddress", "MACAddress") or "").lower()
+        if not mac:
+            return
+        out[mac] = {
+            "signal_dbm": _dbm(_v(node, *RSSI_KEYS)),
+            "snr_db": _to_int(_v(node, "X_ZTE-COM_SNR", "SNR")),
+            "noise_dbm": _dbm(_v(node, "X_ZTE-COM_Noise", "Noise")),
+            "tx_mbps": _mbps(_v(node, *TX_KBPS)),
+            "rx_mbps": _mbps(_v(node, *RX_KBPS)),
+            "wifi_mode": _v(node, "X_ZTE-COM_WorkingMode", "X_ZTE-COM_ClientMode", "OperatingStandard"),
+            "channel_width": _v(node, "X_ZTE-COM_ClientChannelWidth", "AssociatedDeviceBandWidth"),
+            "ip": _v(node, "AssociatedDeviceIPAddress"),
+            "name": _v(node, "X_ZTE-COM_AssociatedDeviceName"),
+            "seconds": _to_int(_v(node, "X_ZTE-COM_Uptime", "X_ZTE-COM_StayTime")),
+            "band": band,
+            "wlan_path": wlan_path,
+        }
+
+    igd = (device or {}).get("InternetGatewayDevice")
+    if isinstance(igd, dict):
+        for li, lan in _children(igd.get("LANDevice")):
+            for wi, wlan in _children(lan.get("WLANConfiguration")):
+                band = detect_band(wlan)
+                path = f"InternetGatewayDevice.LANDevice.{li}.WLANConfiguration.{wi}"
+                for _, node in _children(wlan.get("AssociatedDevice")):
+                    add(node, band, path)
+
+    tr181 = (device or {}).get("Device")
+    if isinstance(tr181, dict):
+        for ai, ap in _children((tr181.get("WiFi") or {}).get("AccessPoint")):
+            path = f"Device.WiFi.AccessPoint.{ai}"
+            for _, node in _children(ap.get("AssociatedDevice")):
+                add(node, None, path)
+
+    return out
+
+
 def _host(device, node):
     kind = _v(node, "InterfaceType")
     l2 = _v(node, "Layer2Interface", "ConnectInterface", "Layer1Interface")
@@ -96,9 +184,15 @@ def _host(device, node):
     signal = _v(node, "PowerLevel", "X_ZTE-COM_RSSI", "SignalStrength")
     rate = _to_int(_v(node, "downLinkNegotiationRate"))  # Mbps (VSOL)
 
+    ip = _v(node, "IPAddress")
+    if ip == "0.0.0.0":
+        ip = None
+    if str(kind).strip().lower() in ("unknown", "unkown"):  # ZTE: "Unkown"
+        kind = None
+
     return {
         "hostname": _v(node, "HostName"),
-        "ip": _v(node, "IPAddress"),
+        "ip": ip,
         "mac": (str(_v(node, "MACAddress", "PhysAddress") or "").lower() or None),
         "active": _bool(_v(node, "Active")),
         "address_source": _v(node, "AddressSource"),
@@ -109,9 +203,32 @@ def _host(device, node):
         ),
         "lease_remaining": _to_int(_v(node, "LeaseTimeRemaining")),
         "online_seconds": online,
-        "signal_dbm": _to_int(signal),
+        "signal_dbm": _dbm(signal),
         "link_rate": rate,
     }
+
+
+def _merge_wifi(device, host, assoc):
+    """Completa un equipo con su asociacion Wi-Fi (señal, velocidades, modo)."""
+
+    if host.get("signal_dbm") is None:
+        host["signal_dbm"] = assoc["signal_dbm"]
+    if not host.get("link_rate"):
+        host["link_rate"] = assoc["tx_mbps"]
+    host["rx_rate"] = assoc["rx_mbps"]
+    host["snr_db"] = assoc["snr_db"]
+    host["noise_dbm"] = assoc["noise_dbm"]
+    host["wifi_mode"] = assoc["wifi_mode"]
+    host["channel_width"] = assoc["channel_width"]
+    host["connection"] = "wifi"
+    if not host.get("hostname"):
+        host["hostname"] = assoc["name"]
+    if not host.get("ip") or host["ip"] == "0.0.0.0":
+        host["ip"] = assoc["ip"]
+    if not host.get("interface") or host["interface"] in ("Wi-Fi", "802.11"):
+        host["interface"] = _interface(device, assoc["wlan_path"], "802.11")
+    if host.get("online_seconds") is None:
+        host["online_seconds"] = assoc["seconds"]
 
 
 def read_hosts(device):
@@ -146,6 +263,7 @@ def read_hosts(device):
         }
 
     hosts, newest, reported = [], None, None
+    assoc = associated_devices(device)
 
     for table in tables:
         count = _to_int(_v(table, "HostNumberOfEntries"))
@@ -157,10 +275,32 @@ def read_hosts(device):
             if not any(isinstance(v, dict) and "_value" in v for v in node.values()):
                 continue
 
-            hosts.append(_host(device, node))
+            host = _host(device, node)
+            if host["mac"] in assoc:
+                _merge_wifi(device, host, assoc.pop(host["mac"]))
+            hosts.append(host)
             stamp = _ts(node)
             if stamp and (newest is None or stamp > newest):
                 newest = stamp
+
+    # Asociados al Wi-Fi que la tabla Hosts no lista (o aun no se leyo).
+    for mac, data in assoc.items():
+        host = {
+            "hostname": None, "ip": None, "mac": mac, "active": True,
+            "address_source": None, "interface": None, "connection": "wifi",
+            "lease_remaining": None, "online_seconds": None,
+            "signal_dbm": None, "link_rate": None,
+        }
+        _merge_wifi(device, host, data)
+        hosts.append(host)
+
+    for host in hosts:
+        host.setdefault("rx_rate", None)
+        host.setdefault("snr_db", None)
+        host.setdefault("noise_dbm", None)
+        host.setdefault("wifi_mode", None)
+        host.setdefault("channel_width", None)
+        host["signal_quality"] = signal_quality(host.get("signal_dbm"))
 
     hosts.sort(key=lambda h: (h["active"] is False, h["connection"] or "", h["ip"] or ""))
 

@@ -1277,6 +1277,42 @@ function closeDevice() {
             } finally {
                 hostsLoading.value = false
             }
+
+            // La señal Wi-Fi cambia a cada momento: se relee al abrir la pestaña
+            // (solo equipos y asociaciones, 2-3 s en las ONU probadas).
+            if (selectedDevice.value?.online && hosts.value?.supported !== false)
+                refreshHosts()
+        }
+
+        const hostsRefreshing = ref(false)
+
+        async function refreshHosts() {
+            if (!selectedDevice.value)
+                return
+            hostsRefreshing.value = true
+            hostsError.value = null
+            try {
+                const id = encodeURIComponent(selectedDevice.value.id)
+                const r = await fetch(`/api/devices/${id}/hosts/refresh`, { method: 'POST' })
+                const data = await r.json().catch(() => ({}))
+                if (!r.ok)
+                    throw new Error(data.detail || `HTTP ${r.status}`)
+                hosts.value = data
+                if (data.status === 'en_cola')
+                    hostsError.value = 'La ONU no respondió a tiempo; se muestran los últimos datos guardados.'
+            } catch (e) {
+                hostsError.value = e.message || 'No fue posible actualizar los equipos.'
+            } finally {
+                hostsRefreshing.value = false
+            }
+        }
+
+        function hostRate(h) {
+            if (!h.link_rate && !h.rx_rate)
+                return ''
+            if (h.rx_rate)
+                return `↓ ${h.link_rate || '-'} · ↑ ${h.rx_rate} Mbps`
+            return `${h.link_rate} Mbps`
         }
 
         function hostDuration(seconds) {
@@ -3395,6 +3431,9 @@ function formatDate(value) {
             hostsError,
             openHosts,
             hostDuration,
+            hostsRefreshing,
+            refreshHosts,
+            hostRate,
 
             catv,
             catvLoading,
@@ -6401,13 +6440,24 @@ function formatDate(value) {
                                     Consultando equipos conectados...
                                 </div>
 
-                                <div v-else-if="hostsError" class="error-message">
-                                    {{ hostsError }}
-                                </div>
+                                <template v-else>
 
-                                <template v-else-if="hosts">
+                                    <div class="hosts-head">
+                                        <h3>Equipos conectados</h3>
+                                        <button
+                                            class="hosts-refresh"
+                                            :disabled="hostsRefreshing"
+                                            @click="refreshHosts"
+                                        >
+                                            {{ hostsRefreshing ? 'Leyendo…' : '↻ Actualizar equipos y señal' }}
+                                        </button>
+                                    </div>
 
-                                    <h3>Equipos conectados</h3>
+                                    <div v-if="hostsError" class="error-message">
+                                        {{ hostsError }}
+                                    </div>
+
+                                <template v-if="hosts">
 
                                     <p v-if="!hosts.supported" class="hosts-note">
                                         {{ hosts.reason }}
@@ -6438,6 +6488,7 @@ function formatDate(value) {
                                                         <th>IP</th>
                                                         <th>MAC</th>
                                                         <th>Conexión</th>
+                                                        <th>Señal Wi-Fi</th>
                                                         <th>Conectado</th>
                                                     </tr>
                                                 </thead>
@@ -6458,8 +6509,29 @@ function formatDate(value) {
                                                         <td class="mono">{{ h.mac || '-' }}</td>
                                                         <td>
                                                             {{ h.interface || '-' }}
-                                                            <small v-if="h.signal_dbm !== null">Señal {{ h.signal_dbm }} dBm</small>
-                                                            <small v-if="h.link_rate">{{ h.link_rate }} Mbps</small>
+                                                            <small v-if="h.wifi_mode || h.channel_width">
+                                                                {{ [h.wifi_mode, h.channel_width].filter(Boolean).join(' · ') }}
+                                                            </small>
+                                                        </td>
+                                                        <td>
+                                                            <template v-if="h.signal_dbm !== null && h.signal_dbm !== undefined">
+                                                                <span
+                                                                    class="signal-chip"
+                                                                    :class="'signal-' + (h.signal_quality ? h.signal_quality.level : '')"
+                                                                    :title="h.snr_db !== null ? 'SNR ' + h.snr_db + ' dB' + (h.noise_dbm !== null ? ' · ruido ' + h.noise_dbm + ' dBm' : '') : ''"
+                                                                >
+                                                                    <i class="signal-bars">
+                                                                        <b></b><b></b><b></b><b></b>
+                                                                    </i>
+                                                                    {{ h.signal_dbm }} dBm
+                                                                </span>
+                                                                <small>
+                                                                    {{ h.signal_quality ? h.signal_quality.label : '' }}
+                                                                    <template v-if="h.snr_db !== null"> · SNR {{ h.snr_db }} dB</template>
+                                                                </small>
+                                                                <small v-if="hostRate(h)">{{ hostRate(h) }}</small>
+                                                            </template>
+                                                            <span v-else class="muted-dash">-</span>
                                                         </td>
                                                         <td>{{ hostDuration(h.online_seconds) }}</td>
                                                     </tr>
@@ -6469,6 +6541,7 @@ function formatDate(value) {
 
                                     </template>
 
+                                </template>
                                 </template>
                             </div>
 

@@ -144,6 +144,76 @@ async def device_hosts(device_id: str):
     return {"device": normalize_device(device), **read_hosts(device)}
 
 
+@router.post("/api/devices/{device_id}/hosts/refresh")
+async def device_hosts_refresh(device_id: str):
+    """Relee solo los equipos conectados y la señal Wi-Fi (rapido, solo lectura).
+
+    Pide Hosts y cada WLANConfiguration.{i}.AssociatedDevice en la misma
+    sesion; espera hasta ~25 s y devuelve los datos nuevos.
+    """
+
+    import asyncio
+    from app.services.device_refresh import known_heavy
+    from app.services.hosts_reader import read_hosts
+
+    device = await genieacs.get_device(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="ONU no encontrada")
+
+    skip = known_heavy(device)[1]
+    paths = []
+
+    igd = device.get("InternetGatewayDevice")
+    if isinstance(igd, dict):
+        for li, lan in (igd.get("LANDevice") or {}).items():
+            if not str(li).isdigit() or not isinstance(lan, dict):
+                continue
+            base = f"InternetGatewayDevice.LANDevice.{li}"
+            if "Hosts" in lan and not any(f"{base}.Hosts".startswith(x) for x in skip):
+                paths.append(f"{base}.Hosts")
+            for wi, wlan in (lan.get("WLANConfiguration") or {}).items():
+                if str(wi).isdigit() and isinstance(wlan, dict):
+                    paths.append(f"{base}.WLANConfiguration.{wi}.AssociatedDevice")
+
+    tr181 = device.get("Device")
+    if isinstance(tr181, dict):
+        if "Hosts" in tr181:
+            paths.append("Device.Hosts")
+        for ai, ap in ((tr181.get("WiFi") or {}).get("AccessPoint") or {}).items():
+            if str(ai).isdigit():
+                paths.append(f"Device.WiFi.AccessPoint.{ai}.AssociatedDevice")
+
+    if not paths:
+        return {"device": normalize_device(device), "status": "sin_datos", **read_hosts(device)}
+
+    status = "en_cola"
+    try:
+        for i, path in enumerate(paths):
+            last = i == len(paths) - 1
+            code = await genieacs.post_task(
+                device_id,
+                {"name": "refreshObject", "objectName": path},
+                connection_request=last,
+                wait_ms=25000,
+            )
+            if last and code == 200:
+                status = "actualizado"
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"No fue posible pedir la lectura: {str(exc) or type(exc).__name__}")
+
+    device = await genieacs.get_device(device_id) or device
+
+    # Si la ONU no proceso todo (offline o lenta), no dejar tareas colgadas
+    # que se ejecuten horas despues.
+    if status != "actualizado":
+        for task in await genieacs.get_tasks(device_id):
+            if task.get("name") == "refreshObject" and task.get("objectName") in paths:
+                await genieacs.delete_task(task["_id"])
+        await asyncio.sleep(0)
+
+    return {"device": normalize_device(device), "status": status, **read_hosts(device)}
+
+
 # Lectura de datos bajo demanda (solo lectura en la ONU)
 
 @router.post("/api/devices/{device_id}/refresh")
