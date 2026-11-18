@@ -183,6 +183,7 @@ def _host(device, node):
     online = _to_int(_v(node, "X_ZTE-COM_OnlineDuration", "OnlineTime"))
     signal = _v(node, "PowerLevel", "X_ZTE-COM_RSSI", "SignalStrength")
     rate = _to_int(_v(node, "downLinkNegotiationRate"))  # Mbps (VSOL)
+    rate_up = _to_int(_v(node, "upLinkNegotiationRate"))  # Mbps (VSOL)
 
     ip = _v(node, "IPAddress")
     if ip == "0.0.0.0":
@@ -205,6 +206,7 @@ def _host(device, node):
         "online_seconds": online,
         "signal_dbm": _dbm(signal),
         "link_rate": rate,
+        "rx_rate": rate_up,
     }
 
 
@@ -215,7 +217,8 @@ def _merge_wifi(device, host, assoc):
         host["signal_dbm"] = assoc["signal_dbm"]
     if not host.get("link_rate"):
         host["link_rate"] = assoc["tx_mbps"]
-    host["rx_rate"] = assoc["rx_mbps"]
+    if not host.get("rx_rate"):
+        host["rx_rate"] = assoc["rx_mbps"]
     host["snr_db"] = assoc["snr_db"]
     host["noise_dbm"] = assoc["noise_dbm"]
     host["wifi_mode"] = assoc["wifi_mode"]
@@ -223,9 +226,12 @@ def _merge_wifi(device, host, assoc):
     host["connection"] = "wifi"
     if not host.get("hostname"):
         host["hostname"] = assoc["name"]
-    if not host.get("ip") or host["ip"] == "0.0.0.0":
+    if not host.get("ip") and assoc["ip"] not in (None, "", "0.0.0.0"):
         host["ip"] = assoc["ip"]
-    if not host.get("interface") or host["interface"] in ("Wi-Fi", "802.11"):
+    # La radio donde esta asociado manda: la V2804AX30-H reporta en Hosts
+    # ConnectInterface = WLANConfiguration.1 (5 GHz) para todos los equipos,
+    # aunque esten asociados a la WLAN 5 (2.4 GHz).
+    if assoc.get("wlan_path"):
         host["interface"] = _interface(device, assoc["wlan_path"], "802.11")
     if host.get("online_seconds") is None:
         host["online_seconds"] = assoc["seconds"]
