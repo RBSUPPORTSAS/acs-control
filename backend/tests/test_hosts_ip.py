@@ -120,3 +120,27 @@ def test_umbrales_de_senal():
     assert [signal_quality(x)["level"] for x in (-40, -55, -60, -67, -70, -76)] == [
         "excelente", "excelente", "buena", "buena", "regular", "debil"]
     assert signal_quality(None) is None
+
+
+def test_v2804ax30_banda_desde_la_asociacion_y_velocidades():
+    """V2804AX30-H: Hosts dice WLAN 1 (5 GHz) pero el equipo esta asociado a la
+    WLAN 5 (2.4 GHz); la señal viene en Hosts.PowerLevel."""
+    d = lan({
+        "38": {"IPAddress": v("192.168.1.190"), "MACAddress": v("16:98:49:7D:2A:0D"), "Active": v(True),
+               "InterfaceType": v("802.11"), "PowerLevel": v("-57"),
+               "ConnectInterface": v("InternetGatewayDevice.LANDevice.1.WLANConfiguration.1."),
+               "downLinkNegotiationRate": v(1), "upLinkNegotiationRate": v(96)},
+    }, count=1)
+    wlan = d["InternetGatewayDevice"]["LANDevice"]["1"]["WLANConfiguration"]
+    wlan["1"] = {"Standard": v("a,n,ac"), "SSID": v("RED"), "AssociatedDevice": {
+        "1": {"AssociatedDeviceMACAddress": v("34:6F:24:42:83:A3"), "AssociatedDeviceIPAddress": v("0.0.0.0")}}}
+    wlan["5"] = {"Standard": v("b,g,n,ax"), "SSID": v("RED"), "AssociatedDevice": {
+        "2": {"AssociatedDeviceMACAddress": v("16:98:49:7D:2A:0D"), "AssociatedDeviceIPAddress": v("192.168.1.190")}}}
+    h = {x["mac"]: x for x in read_hosts(d)["hosts"]}
+    tel = h["16:98:49:7d:2a:0d"]
+    assert tel["interface"] == "Wi-Fi 2.4 GHz · RED"
+    assert tel["signal_dbm"] == -57 and tel["signal_quality"]["level"] == "buena"
+    assert tel["link_rate"] == 1 and tel["rx_rate"] == 96
+    # Asociado a 5 GHz sin entrada en Hosts y sin IP.
+    otro = h["34:6f:24:42:83:a3"]
+    assert otro["ip"] is None and otro["interface"] == "Wi-Fi 5 GHz · RED" and otro["signal_dbm"] is None
