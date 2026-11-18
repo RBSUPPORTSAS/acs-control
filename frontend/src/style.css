@@ -4016,3 +4016,76 @@ button:disabled {
 .config-test-button:hover:not(:disabled) {
     border-color: var(--text) !important;
 }
+
+
+/* ==========================================================
+   EQUIPOS: SEÑAL WI-FI
+   ========================================================== */
+
+.hosts-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.hosts-head h3 {
+    margin: 0;
+}
+
+.hosts-refresh {
+    padding: 7px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    background: transparent;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.hosts-refresh:hover:not(:disabled) {
+    border-color: var(--text);
+}
+
+.signal-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.signal-bars {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 12px;
+}
+
+.signal-bars b {
+    width: 3px;
+    border-radius: 1px;
+    background: var(--border-strong);
+}
+
+.signal-bars b:nth-child(1) { height: 4px; }
+.signal-bars b:nth-child(2) { height: 6px; }
+.signal-bars b:nth-child(3) { height: 9px; }
+.signal-bars b:nth-child(4) { height: 12px; }
+
+.signal-excelente { color: var(--success-text); }
+.signal-buena { color: var(--success-text); }
+.signal-regular { color: var(--warning-text); }
+.signal-debil { color: var(--danger-text); }
+
+.signal-excelente .signal-bars b { background: currentColor; }
+.signal-buena .signal-bars b:nth-child(-n+3) { background: currentColor; }
+.signal-regular .signal-bars b:nth-child(-n+2) { background: currentColor; }
+.signal-debil .signal-bars b:nth-child(1) { background: currentColor; }
+
+.muted-dash {
+    color: var(--text-faint);
+}

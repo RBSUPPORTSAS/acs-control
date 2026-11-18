@@ -78,3 +78,45 @@ def test_tr181():
     }}}}}
     h = read_hosts(d)["hosts"][0]
     assert h["mac"] == "aa:bb:cc:dd:ee:ff" and h["active"] is True and h["connection"] == "lan"
+
+
+def zte_wifi():
+    """ZTE F6600P: Hosts + WLANConfiguration.{i}.AssociatedDevice con RSSI."""
+    d = lan({
+        "13": {"IPAddress": v("192.168.1.11"), "MACAddress": v("9A:CA:8A:ED:C6:B0"), "Active": v(True),
+               "InterfaceType": v("802.11"), "HostName": v("tel"),
+               "Layer2Interface": v("InternetGatewayDevice.LANDevice.1.WLANConfiguration.5")},
+        "15": {"IPAddress": v("0.0.0.0"), "Active": v(False), "InterfaceType": v("Unkown")},
+    }, count=2)
+    d["InternetGatewayDevice"]["LANDevice"]["1"]["WLANConfiguration"]["5"]["AssociatedDevice"] = {
+        "7": {"AssociatedDeviceMACAddress": v("9a:ca:8a:ed:c6:b0"), "AssociatedDeviceRssi": v(-79),
+              "X_ZTE-COM_SNR": v(14), "X_ZTE-COM_Noise": v(-93), "X_ZTE-COM_TxRate": v(433000),
+              "X_ZTE-COM_RxRate": v(6000), "X_ZTE-COM_WorkingMode": v("11ac"),
+              "X_ZTE-COM_ClientChannelWidth": v("80MHz")},
+        # Asociado al Wi-Fi pero sin entrada en Hosts.
+        "8": {"AssociatedDeviceMACAddress": v("D2:75:67:90:62:47"), "X_ZTE-COM_RSSI": v(-55),
+              "AssociatedDeviceIPAddress": v("192.168.1.16"), "X_ZTE-COM_AssociatedDeviceName": v("Galaxy")},
+    }
+    return d
+
+
+def test_senal_wifi_desde_associated_device():
+    r = read_hosts(zte_wifi())
+    h = {x["mac"]: x for x in r["hosts"]}
+    tel = h["9a:ca:8a:ed:c6:b0"]
+    assert tel["signal_dbm"] == -79 and tel["signal_quality"]["level"] == "debil"
+    assert tel["snr_db"] == 14 and tel["noise_dbm"] == -93
+    assert tel["link_rate"] == 433 and tel["rx_rate"] == 6
+    assert tel["wifi_mode"] == "11ac" and tel["channel_width"] == "80MHz"
+    galaxy = h["d2:75:67:90:62:47"]
+    assert galaxy["hostname"] == "Galaxy" and galaxy["ip"] == "192.168.1.16"
+    assert galaxy["signal_quality"]["label"] == "Excelente" and galaxy["connection"] == "wifi"
+    ghost = next(x for x in r["hosts"] if x["active"] is False)
+    assert ghost["ip"] is None and ghost["interface"] is None
+
+
+def test_umbrales_de_senal():
+    from app.services.hosts_reader import signal_quality
+    assert [signal_quality(x)["level"] for x in (-40, -55, -60, -67, -70, -76)] == [
+        "excelente", "excelente", "buena", "buena", "regular", "debil"]
+    assert signal_quality(None) is None
