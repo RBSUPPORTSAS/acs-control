@@ -333,6 +333,7 @@ def ctcom_notes(device):
 # (Enable = servicio encendido; no distingue WAN/LAN), nivel del firewall en
 # Firewall.Config (texto Low/Middle/High, solo lectura). Telnet/FTP se
 # muestran como servicio LAN. Usuarios y contrasenas nunca se muestran.
+# Acceso por WAN (HTTP, HTTPS, PING, Telnet, FTP): zte_service_control.
 def _zte(device, name):
     try:
         node = device["InternetGatewayDevice"][name]
@@ -349,6 +350,13 @@ def zte_table(device):
         if node and isinstance(node.get("Enable"), dict):
             nodes[f"{svc}LanEnable"] = node["Enable"]
             paths[f"{svc}LanEnable"] = f"InternetGatewayDevice.{branch}.Enable"
+
+    # Acceso por WAN: reglas de Firewall.X_ZTE-COM_ServiceControl.
+    from app.services import zte_service_control
+
+    wan_nodes, wan_paths = zte_service_control.table_nodes(device)
+    nodes.update(wan_nodes)
+    paths.update(wan_paths)
 
     return nodes, paths
 
@@ -702,7 +710,7 @@ def security_state(device):
 
         # Regla operativa del módulo.
         "wan_activation_allowed":
-            grade == 0,
+            grade == 0 or firewall_source(device)[0] == "zte",
 
         # Nunca se modifica CWMP aquí.
         "tr069_protected": True,
@@ -743,7 +751,9 @@ def service_changes(
         # REGLA PRINCIPAL:
         # solo nivel Bajo permite NUEVAS
         # activaciones desde WAN.
-        if enabled and grade != 0:
+        # ZTE: las reglas de servicio son permisos explicitos y el nivel
+        # del firewall no se puede bajar por TR-069.
+        if enabled and grade != 0 and firewall_source(device)[0] != "zte":
             raise ValueError(
                 "Para activar servicios por WAN "
                 "el firewall debe estar en nivel Bajo"
@@ -808,7 +818,8 @@ def service_changes(
         values.append([
             paths.get(cfg["port"], BASE + cfg["port"]),
             port,
-            "xsd:unsignedInt"
+            # ZTE guarda el puerto como xsd:int: escribir con el tipo de la ONU.
+            obj.get("_type") or "xsd:unsignedInt"
         ])
 
         requested["wan_port"] = port
@@ -829,9 +840,16 @@ def service_changes(
             or ""
         ).strip()
 
+        ip_path = paths.get(cfg["ip"], BASE + cfg["ip"])
+
         if ip:
             try:
-                ipaddress.ip_address(ip)
+                if ip_path.startswith("zte-sc:"):
+                    # ZTE admite un rango "inicio-fin" (IPStart/IPEnd).
+                    from app.services.zte_service_control import _ip_range
+                    _ip_range(ip)
+                else:
+                    ipaddress.ip_address(ip)
             except ValueError:
                 raise ValueError(
                     "IP permitida inválida"

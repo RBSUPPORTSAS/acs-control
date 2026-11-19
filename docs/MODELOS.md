@@ -3,7 +3,7 @@
 Esta lista dice qué modelos funcionan con ACS-Control sobre GenieACS y qué se probó en cada uno.
 Se actualiza con cada modelo nuevo que se valida.
 
-Última actualización: 2026-11-19 (ZTE F6600P: puertos a WAN y corrección de Wi-Fi).
+Última actualización: 2026-11-19 (ZTE F6600P: puertos a WAN, Wi-Fi y acceso remoto por WAN).
 
 ## Cómo leer esta tabla
 
@@ -201,6 +201,7 @@ Probado el 2026-11-11 en una ONU en servicio y el 2026-11-19 en una ONU de labor
 | Asociar puertos LAN/WiFi a una WAN | ✅ Al crear y al editar (DHCP y PPPoE), LAN y SSID de 2.4/5 GHz juntos; mover un puerto de una WAN a otra; al borrar la WAN se quita su asociación. Tabla `X_ZTE-COM_PortBinding`. |
 | WiFi 2.4 y 5 GHz | ✅ SSID y canal (manual y automático) en ambas bandas. Clave: se envía a `KeyPassphrase`; si la ONU la rechaza, ACS-Control muestra el error. |
 | Telnet y FTP (LAN) encender / apagar | ✅ `X_ZTE-COM_Telnet.Enable`, `X_ZTE-COM_FTP.Enable` |
+| Acceso remoto por WAN: HTTP, HTTPS, PING, Telnet, FTP | ✅ Encender / apagar, limitar a una IP o rango de origen y cambiar el puerto (HTTP, HTTPS, Telnet, FTP). Comprobado desde fuera: HTTP y HTTPS abren y cierran, y con una IP de origen ajena HTTP queda cerrado. SSH y TFTP no existen en este firmware. |
 | Equipos conectados con señal Wi-Fi | 👁 RSSI, SNR, ruido, velocidades, modo (11n/11ac) y ancho de canal desde `WLANConfiguration.{i}.AssociatedDevice` |
 | Nivel de firewall | 👁 `Firewall.Config` (Low/Middle/High), solo lectura. |
 | CATV | — |
@@ -214,6 +215,7 @@ Detalles técnicos:
 - Las conexiones nuevas nacen apagadas, "Unconfigured" y en VLAN 0; ACS-Control las configura y las enciende.
 - Al editar una WAN DHCP el nombre pasa a usar el número del WCD (`1_INTERNET_R_VID_998`). Es solo cosmético.
 - Puertos: la ONU no usa un parámetro en la conexión sino la tabla `InternetGatewayDevice.X_ZTE-COM_PortBinding.{i}` con `WANInterface` (ruta de la conexión) y `LANInterface` (rutas separadas por coma, como `X_CT-COM_LanInterface`). Viene vacía de fábrica y GenieACS no la lee si no se pide; ACS-Control la incluye en "Leer de la ONU". La ONU responde `cwmp.9003` a rutas de puertos inexistentes.
+- Acceso por WAN: no hay un interruptor por servicio sino reglas en `Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.{i}` (`Enable`, `ServiceType` "HTTP,HTTPS,PING", `Ingress` "WAN_ALL", `Mode` "Accept", `IPStart`/`IPEnd`; 0.0.0.0 = cualquiera). Vacía de fábrica = todo cerrado por WAN. Acepta HTTP, HTTPS, PING, TELNET y FTP (`ICMP`, `SSH` y `TFTP` dan `cwmp.9003`). ACS-Control crea una regla por servicio (`ACS_HTTP`, …) y, si un servicio estaba en una regla compartida hecha a mano, lo saca de ella. El nivel del firewall (Middle) no impide abrir servicios con estas reglas. La IP de gestión TR-069 responde ping aunque PING esté apagado.
 - Wi-Fi: la ONU responde `cwmp.9003` a `Channel=0` y rechaza todo el cambio (también SSID y clave). Con `AutoChannelEnable` ACS-Control ya no lo envía, y solo manda los campos que cambian.
 
 ### Familia X_CATV (no certificada, prioridad baja)
