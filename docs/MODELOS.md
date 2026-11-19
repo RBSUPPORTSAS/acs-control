@@ -3,7 +3,7 @@
 Esta lista dice qué modelos funcionan con ACS-Control sobre GenieACS y qué se probó en cada uno.
 Se actualiza con cada modelo nuevo que se valida.
 
-Última actualización: 2026-11-11 (V2804AX30-H y ZTE F6600P certificado).
+Última actualización: 2026-11-19 (ZTE F6600P: puertos a WAN y corrección de Wi-Fi).
 
 ## Cómo leer esta tabla
 
@@ -189,7 +189,7 @@ Detalles técnicos:
 
 ### ZTE F6600P
 
-Probado el 2026-11-11 en una ONU en servicio, con autorización del supervisor (fw V9.0.10P6N44).
+Probado el 2026-11-11 en una ONU en servicio y el 2026-11-19 en una ONU de laboratorio, con autorización del supervisor (fw V9.0.10P6N44).
 
 | Función | Resultado |
 |---|---|
@@ -198,8 +198,8 @@ Probado el 2026-11-11 en una ONU en servicio, con autorización del supervisor (
 | Crear / editar / eliminar WAN PPPoE | ✅ (6 s / 3 s / 3 s) |
 | La ruta por defecto del cliente no cambia al crear WAN | ✅ |
 | WAN IP fija | ⏳ Bloqueada hasta probarla en laboratorio (queda encendida con gateway y podría tomar la ruta por defecto). |
-| Asociar puertos LAN/WiFi a una WAN | ❌ El firmware no lo expone por TR-069 (`X_ZTE-COM_PortBinding` vacío); ACS-Control lo rechaza con un mensaje. |
-| WiFi 2.4 y 5 GHz | ✅ (reescritura del SSID) |
+| Asociar puertos LAN/WiFi a una WAN | ✅ Al crear y al editar (DHCP y PPPoE), LAN y SSID de 2.4/5 GHz juntos; mover un puerto de una WAN a otra; al borrar la WAN se quita su asociación. Tabla `X_ZTE-COM_PortBinding`. |
+| WiFi 2.4 y 5 GHz | ✅ SSID y canal (manual y automático) en ambas bandas. Clave: se envía a `KeyPassphrase`; si la ONU la rechaza, ACS-Control muestra el error. |
 | Telnet y FTP (LAN) encender / apagar | ✅ `X_ZTE-COM_Telnet.Enable`, `X_ZTE-COM_FTP.Enable` |
 | Equipos conectados con señal Wi-Fi | 👁 RSSI, SNR, ruido, velocidades, modo (11n/11ac) y ancho de canal desde `WLANConfiguration.{i}.AssociatedDevice` |
 | Nivel de firewall | 👁 `Firewall.Config` (Low/Middle/High), solo lectura. |
@@ -213,6 +213,8 @@ Detalles técnicos:
 - `addObject` de un WANConnectionDevice nuevo da `cwmp.9002`: las WAN se crean como conexiones dentro del WCD 1, donde también viven la TR-069 y la de Internet. Al eliminar se borra solo la conexión.
 - Las conexiones nuevas nacen apagadas, "Unconfigured" y en VLAN 0; ACS-Control las configura y las enciende.
 - Al editar una WAN DHCP el nombre pasa a usar el número del WCD (`1_INTERNET_R_VID_998`). Es solo cosmético.
+- Puertos: la ONU no usa un parámetro en la conexión sino la tabla `InternetGatewayDevice.X_ZTE-COM_PortBinding.{i}` con `WANInterface` (ruta de la conexión) y `LANInterface` (rutas separadas por coma, como `X_CT-COM_LanInterface`). Viene vacía de fábrica y GenieACS no la lee si no se pide; ACS-Control la incluye en "Leer de la ONU". La ONU responde `cwmp.9003` a rutas de puertos inexistentes.
+- Wi-Fi: la ONU responde `cwmp.9003` a `Channel=0` y rechaza todo el cambio (también SSID y clave). Con `AutoChannelEnable` ACS-Control ya no lo envía, y solo manda los campos que cambian.
 
 ### Familia X_CATV (no certificada, prioridad baja)
 

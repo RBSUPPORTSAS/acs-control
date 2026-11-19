@@ -159,7 +159,8 @@ VENDORS = {
     },
     # ZTE F6600P (fw V9.0.10P6N44): VLAN/802.1p/servicios con prefijo
     # X_ZTE-COM_ en la conexion; la VLAN solo se etiqueta con VLANEnable.
-    # No expone por TR-069 como asociar puertos a una WAN (PortBinding vacio).
+    # Los puertos LAN/SSID se asocian en la tabla X_ZTE-COM_PortBinding
+    # (zte_port_binding), no en la conexion.
     "zte": {
         "rename": {
             "X_CT-COM_VLANIDMark": ("X_ZTE-COM_VLANID", "xsd:unsignedInt"),
@@ -169,7 +170,7 @@ VENDORS = {
         "also": {
             "X_ZTE-COM_VLANID": [("X_ZTE-COM_VLANEnable", True, "xsd:boolean")],
         },
-        "interfaces": lambda conn_base, value: _no_interfaces(value),
+        "interfaces": lambda conn_base, value: [],
     },
     # RX8102WT (fw V1.9.2.0-220715): 802.1p en VlanPriMark de la conexion.
     "realtek_vpm": {
@@ -180,14 +181,6 @@ VENDORS = {
         "interfaces": rtk_lan_interface,
     },
 }
-
-
-def _no_interfaces(value):
-    if str(value or "").strip():
-        raise ValueError(
-            "Este modelo no permite asociar puertos LAN/WiFi a una WAN por TR-069"
-        )
-    return []
 
 
 def vendor_of(driver):
@@ -384,6 +377,16 @@ async def create_vendor_wan(client, device_id, data, mode="DHCP", vendor="huawei
         connection_request=True,
         wait_ms=60000 if vendor == "cmcc" else 10000,
     )
+
+    # ZTE F6600P: puertos en la tabla X_ZTE-COM_PortBinding.
+    if vendor == "zte" and data.get("bindings"):
+        from app.services import zte_port_binding
+
+        await zte_port_binding.apply(
+            client, device_id,
+            f"{base_wcd(wcd)}.{container}.{instance}",
+            ",".join(data["bindings"]),
+        )
 
     # RT9607C: el 802.1p va en Layer2Bridging.Marking (no hay X_RZ_802-1pMark).
     if vendor == "realtek":

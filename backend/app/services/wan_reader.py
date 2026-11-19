@@ -406,6 +406,18 @@ def read_wan(device):
                     )
                 )
 
+    # ZTE F6600P: los puertos de cada WAN estan en X_ZTE-COM_PortBinding.
+    if isinstance(igd.get("X_ZTE-COM_PortBinding"), dict):
+        from app.services.zte_port_binding import binding_for
+
+        for item in result:
+            if item.get("lan_binding"):
+                continue
+            item["lan_binding"] = binding_for(device, (
+                "InternetGatewayDevice.WANDevice.1.WANConnectionDevice."
+                f"{item.get('wan_connection_device')}.{item.get('object_type')}.{item.get('instance')}"
+            ))
+
     # Complementar inventario con X_CATV_WANIndex.
     # Algunos equipos reportan WAN especiales (ej. TR069/WCD 0)
     # únicamente a través de este índice.
@@ -550,10 +562,10 @@ def friendly_bindings(device, raw):
             enabled = field(obj, "Enable")
             standard = field(obj, "Standard")
 
-            if standard and "a" in str(standard):
-                band = "5 GHz"
-            else:
-                band = "2.4 GHz"
+            # "b,g,n,ax" es 2.4 GHz aunque tenga una "a" (Wi-Fi 6).
+            from app.services.wifi_writer import detect_band
+
+            band = detect_band(obj) if standard else "2.4 GHz"
 
             result.append({
                 "type": "wifi",
