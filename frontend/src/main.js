@@ -2481,7 +2481,9 @@ function catvState(value) {
                 wifiMessage.value[index] =
                     status === 'CONFIRMADO'
                         ? '✓ Cambios confirmados'
-                        : `Cambios enviados: ${status}`
+                        : status === 'SIN_CAMBIOS'
+                            ? 'Sin cambios: la ONU ya tenía esos valores'
+                            : `Cambios enviados: ${status}`
 
             } catch (e) {
 

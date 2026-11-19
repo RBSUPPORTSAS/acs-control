@@ -157,9 +157,10 @@ def test_zte_traduccion_wan():
     assert by["X_ZTE-COM_VLANID"] == 999 and by["X_ZTE-COM_VLANEnable"] is True
     assert by["X_ZTE-COM_8021P"] == 3 and by["X_ZTE-COM_ServiceList"] == "INTERNET"
     assert not any("X_CT-COM" in p for p, _, _ in vals)
-    with pytest.raises(ValueError):
-        translate(build_dhcp_values(1, 2, {"vlan": 999, "bindings": [
-            "InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1"]})["parameter_values"], "zte")
+    # Los puertos no van en la conexion sino en X_ZTE-COM_PortBinding.
+    vals = translate(build_dhcp_values(1, 2, {"vlan": 999, "bindings": [
+        "InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1"]})["parameter_values"], "zte")
+    assert not any("LanInterface" in p for p, _, _ in vals)
 
 
 def test_rama_leida_por_partes_esta_completa():

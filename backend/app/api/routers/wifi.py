@@ -74,6 +74,33 @@ async def device_wifi_capabilities(device_id: str):
 
 
 # ACS_WIFI_WRITE_15B1
+class WifiRejected(Exception):
+    pass
+
+
+async def _task_fault(device_id, task_id):
+    """Mensaje si la tarea termino en fault (y la limpia); None si no."""
+
+    if not task_id:
+        return None
+
+    for fault in await genieacs.get_faults(device_id):
+        if not str(fault.get("_id", "")).endswith(f"task_{task_id}"):
+            continue
+
+        await genieacs.delete_fault(fault["_id"])
+        await genieacs.delete_task(task_id)
+
+        detail = fault.get("detail") or {}
+        text = detail.get("faultString") or fault.get("message") or ""
+        return (
+            f"La ONU rechazó el cambio ({fault.get('code')}: {text}). "
+            "No se aplicó nada."
+        )
+
+    return None
+
+
 @router.patch("/api/devices/{device_id}/wifi/{index}")
 async def edit_wifi(
     device_id: str,
@@ -85,6 +112,7 @@ async def edit_wifi(
 
     from app.services.wifi_writer import (
         build_wifi_changes,
+        drop_unchanged,
         wifi_state,
     )
 
@@ -105,6 +133,16 @@ async def edit_wifi(
             404,
             "Interfaz Wi-Fi no encontrada"
         )
+
+    payload = drop_unchanged(device, index, payload)
+
+    if not payload:
+        return {
+            "ok": True,
+            "status": "SIN_CAMBIOS",
+            "wifi": before,
+            "password_changed": False,
+        }
 
     try:
         values, requested = build_wifi_changes(
@@ -137,10 +175,12 @@ async def edit_wifi(
 
     try:
 
-        await genieacs.set_parameter_values(
+        sent = await genieacs.set_parameter_values(
             device_id,
-            values
+            values,
+            wait_ms=10000,
         )
+        task_id = (sent or {}).get("task_id")
 
         confirmed = False
         current_state = None
@@ -148,6 +188,12 @@ async def edit_wifi(
         # Confirmamos solo campos observables.
         for _ in range(5):
             await asyncio.sleep(2)
+
+            # Si la ONU rechazo el paquete, no esperar: avisar y no dejar la
+            # tarea en cola (GenieACS la reintentaria en cada inform).
+            fault = await _task_fault(device_id, task_id)
+            if fault:
+                raise WifiRejected(fault)
 
             current_device = await genieacs.get_device(
                 device_id
@@ -193,6 +239,12 @@ async def edit_wifi(
             "password_changed":
                 bool(payload.get("password"))
         }
+
+    except WifiRejected as exc:
+
+        await update_audit(db, audit, "FALLIDO", str(exc))
+
+        raise HTTPException(422, str(exc))
 
     except Exception as exc:
 

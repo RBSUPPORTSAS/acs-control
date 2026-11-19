@@ -811,11 +811,20 @@ async def edit_pppoe_wan(
             from app.services.vendor_wan import translate, vendor_for
             values = translate(values, vendor_for(device, _drv(device)))
 
+        # ZTE: si solo cambian los puertos no queda nada para la conexion.
+        if values:
+            await genieacs.set_parameter_values(
+                device_id,
+                values
+            )
 
-        await genieacs.set_parameter_values(
-            device_id,
-            values
-        )
+        # ZTE F6600P: los puertos van en la tabla X_ZTE-COM_PortBinding.
+        if _drv(device) == "zte" and "bindings" in payload:
+            from app.services import zte_port_binding
+
+            await zte_port_binding.apply(
+                genieacs, device_id, base, ",".join(payload["bindings"])
+            )
 
         # RT9607C: VLAN/802.1p tambien en Layer2Bridging.Marking del WCD.
         from app.services import l2_marking
@@ -1782,6 +1791,12 @@ async def delete_wan_wcd(
 
             await _delete_retrying(device_id, object_name)
 
+        # ZTE F6600P: quitar la asociacion de puertos de la WAN borrada.
+        if only_connection and detect_wan_driver(device) == "zte":
+            from app.services import zte_port_binding
+
+            await zte_port_binding.remove_for(genieacs, device_id, device, object_name)
+
         confirmed = False
 
         for _ in range(max(6, confirm_tries(device))):
@@ -2070,11 +2085,20 @@ async def edit_pppoe_wan_wcd(
             from app.services.vendor_wan import translate, vendor_for
             values = translate(values, vendor_for(device, _drv(device)))
 
+        # ZTE: si solo cambian los puertos no queda nada para la conexion.
+        if values:
+            await genieacs.set_parameter_values(
+                device_id,
+                values
+            )
 
-        await genieacs.set_parameter_values(
-            device_id,
-            values
-        )
+        # ZTE F6600P: los puertos van en la tabla X_ZTE-COM_PortBinding.
+        if _drv(device) == "zte" and "bindings" in payload:
+            from app.services import zte_port_binding
+
+            await zte_port_binding.apply(
+                genieacs, device_id, base, ",".join(payload["bindings"])
+            )
 
         # RT9607C: VLAN/802.1p tambien en Layer2Bridging.Marking del WCD.
         from app.services import l2_marking
@@ -2469,10 +2493,20 @@ async def edit_ip_wan_wcd(
             from app.services.vendor_wan import translate, vendor_for
             values = translate(values, vendor_for(device, _drv(device)))
 
-        await genieacs.set_parameter_values(
-            device_id,
-            values
-        )
+        # ZTE: si solo cambian los puertos no queda nada para la conexion.
+        if values:
+            await genieacs.set_parameter_values(
+                device_id,
+                values
+            )
+
+        # ZTE F6600P: los puertos van en la tabla X_ZTE-COM_PortBinding.
+        if _drv(device) == "zte" and "bindings" in payload:
+            from app.services import zte_port_binding
+
+            await zte_port_binding.apply(
+                genieacs, device_id, base, ",".join(payload["bindings"])
+            )
 
         # RT9607C: VLAN/802.1p tambien en Layer2Bridging.Marking del WCD.
         from app.services import l2_marking

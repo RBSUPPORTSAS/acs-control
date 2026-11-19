@@ -42,9 +42,10 @@ BRANCHES = {
         # CDTC FD714 (GS1-R850, GS3-R851): ACL de servicios y CATV.
         "X_CT-COM_Security",
         "X_CMS_Services",
-        # ZTE F6600P: Telnet y FTP.
+        # ZTE F6600P: Telnet, FTP y asociacion de puertos a WAN.
         "X_ZTE-COM_Telnet",
         "X_ZTE-COM_FTP",
+        "X_ZTE-COM_PortBinding",
     ),
     "Device": (
         "DeviceInfo",
