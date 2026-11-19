@@ -131,6 +131,38 @@ def wifi_state(device, index):
     }
 
 
+def drop_unchanged(device, index, payload):
+    """Quita del pedido lo que ya esta igual en la ONU.
+
+    La interfaz envia el formulario completo; mandar solo lo que cambia evita
+    que un campo que la ONU no acepta (p. ej. el canal) tumbe el cambio de
+    SSID o clave, que van en el mismo setParameterValues.
+    """
+
+    state = wifi_state(device, index) or {}
+    payload = dict(payload)
+
+    for key in ("enabled", "ssid", "hidden"):
+        if key in payload and state.get(key) is not None:
+            current = state[key]
+            wanted = str(payload[key]).strip() if key == "ssid" else bool(payload[key])
+            if wanted == current:
+                payload.pop(key)
+
+    auto = payload.get("auto_channel")
+    if auto is not None and state.get("auto_channel") is not None:
+        same_mode = bool(auto) == bool(state["auto_channel"])
+        same_channel = (
+            "channel" not in payload
+            or str(payload.get("channel")) == str(state.get("channel"))
+        )
+        if same_mode and (auto or same_channel):
+            payload.pop("auto_channel")
+            payload.pop("channel", None)
+
+    return payload
+
+
 def build_wifi_changes(device, index, payload):
     obj = wlan_object(device, index)
 
@@ -235,8 +267,10 @@ def build_wifi_changes(device, index, payload):
 
             requested["auto_channel"] = auto
 
-        # Muchos CPE usan Channel=0 como automático.
-        if auto:
+        # Sin AutoChannelEnable, muchos CPE usan Channel=0 como automatico.
+        # Con AutoChannelEnable no se envia: ZTE F6600P responde cwmp.9003
+        # a Channel=0 y rechaza todo el paquete (SSID y clave incluidos).
+        elif auto:
             if writable(obj, "Channel"):
                 values.append([
                     base + "Channel",

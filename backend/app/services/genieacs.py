@@ -143,7 +143,7 @@ class GenieACSClient:
             }
 
     @_queued_on_timeout
-    async def set_parameter_values(self, device_id, values):
+    async def set_parameter_values(self, device_id, values, wait_ms=None):
         from urllib.parse import quote
 
         did = quote(device_id, safe="")
@@ -156,13 +156,23 @@ class GenieACSClient:
         async with httpx.AsyncClient(timeout=30) as client:
             r = await client.post(
                 f"{self.base_url}/devices/{did}/tasks",
-                params={"connection_request": ""},
+                # Con wait_ms GenieACS espera a la ONU: 200 = aplicado,
+                # 202 = en cola o terminada en fault.
+                params=(
+                    {"connection_request": "", "timeout": wait_ms}
+                    if wait_ms else {"connection_request": ""}
+                ),
                 json=task,
             )
 
             r.raise_for_status()
 
-            return {"http_status": r.status_code}
+            try:
+                task_id = r.json().get("_id")
+            except Exception:
+                task_id = None
+
+            return {"http_status": r.status_code, "task_id": task_id}
 
     @_queued_on_timeout
     async def add_object(self, device_id, object_name):
