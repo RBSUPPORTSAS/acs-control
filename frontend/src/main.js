@@ -1180,10 +1180,10 @@ async function loadHealth() {
                     { method: 'POST' }
                 )
 
-                if (!r.ok)
-                    throw new Error(`HTTP ${r.status}`)
+                const data = await r.json().catch(() => ({}))
 
-                const data = await r.json()
+                if (!r.ok)
+                    throw new Error(data.detail || `HTTP ${r.status}`)
 
                 selectedDevice.value.tags = data.tags || []
                 newTag.value = ''
@@ -1192,7 +1192,7 @@ async function loadHealth() {
 
             } catch (e) {
                 console.error(e)
-                alert('No fue posible agregar la etiqueta.')
+                alert(`No fue posible agregar la etiqueta: ${e.message}`)
             } finally {
                 tagBusy.value = false
             }
@@ -1217,10 +1217,10 @@ async function loadHealth() {
                     { method: 'DELETE' }
                 )
 
-                if (!r.ok)
-                    throw new Error(`HTTP ${r.status}`)
+                const data = await r.json().catch(() => ({}))
 
-                const data = await r.json()
+                if (!r.ok)
+                    throw new Error(data.detail || `HTTP ${r.status}`)
 
                 selectedDevice.value.tags = data.tags || []
 
@@ -1228,7 +1228,7 @@ async function loadHealth() {
 
             } catch (e) {
                 console.error(e)
-                alert('No fue posible eliminar la etiqueta.')
+                alert(`No fue posible eliminar la etiqueta: ${e.message}`)
             } finally {
                 tagBusy.value = false
             }
@@ -2992,7 +2992,8 @@ function formatDate(value) {
 
             await Promise.all([
                 loadHealth(),
-                loadDevices()
+                loadDevices(),
+                loadTagCatalog()
             ])
 
             if (!refreshTimer) {
@@ -3112,6 +3113,84 @@ function formatDate(value) {
             } finally {
                 usersLoading.value = false
             }
+        }
+
+        // Catálogo de etiquetas: admin lo define; technical solo asigna de aquí.
+        const TAG_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#06b6d4', '#ec4899', '#64748b']
+        const emptyTagForm = () => ({ name: '', color: TAG_COLORS[0], description: '' })
+        const tagCatalog = ref([])
+        const tagsOpen = ref(false)
+        const tagsError = ref('')
+        const tagsBusy = ref(false)
+        const tagForm = ref(emptyTagForm())
+
+        const tagCatalogNames = computed(() =>
+            new Set(tagCatalog.value.map(t => t.name))
+        )
+
+        const assignableTags = computed(() => {
+            const current = new Set(selectedDevice.value?.tags || [])
+            return tagCatalog.value.filter(t => !current.has(t.name))
+        })
+
+        function tagStyle(name) {
+            const t = tagCatalog.value.find(x => x.name === name)
+            return t ? { '--tag-color': t.color } : null
+        }
+
+        function canRemoveTag(tag) {
+            return isAdmin.value || tagCatalogNames.value.has(tag)
+        }
+
+        async function loadTagCatalog() {
+            try {
+                tagCatalog.value = (await usersRequest('/api/tags')).tags
+            } catch (e) {
+                tagCatalog.value = []
+            }
+        }
+
+        async function openTags() {
+            tagsOpen.value = true
+            tagsError.value = ''
+            tagForm.value = emptyTagForm()
+            await loadTagCatalog()
+        }
+
+        async function tagsAction(fn) {
+            tagsBusy.value = true
+            tagsError.value = ''
+            try {
+                await fn()
+                await loadTagCatalog()
+            } catch (e) {
+                tagsError.value = e.message
+            } finally {
+                tagsBusy.value = false
+            }
+        }
+
+        function createCatalogTag() {
+            return tagsAction(async () => {
+                await usersRequest('/api/tags', {
+                    method: 'POST',
+                    body: JSON.stringify(tagForm.value)
+                })
+                tagForm.value = { ...emptyTagForm(), color: tagForm.value.color }
+            })
+        }
+
+        function updateCatalogTag(tag, changes) {
+            return tagsAction(() => usersRequest(`/api/tags/${tag.id}`, {
+                method: 'PATCH',
+                body: JSON.stringify(changes)
+            }))
+        }
+
+        function deleteCatalogTag(tag) {
+            if (!confirm(`¿Quitar "${tag.name}" del catálogo? Las ONUs que ya la tienen la conservan.`))
+                return
+            return tagsAction(() => usersRequest(`/api/tags/${tag.id}`, { method: 'DELETE' }))
         }
 
         async function openUsers() {
@@ -3338,6 +3417,19 @@ function formatDate(value) {
             loginError,
             isAdmin,
             roleLabel,
+            TAG_COLORS,
+            tagCatalog,
+            tagsOpen,
+            tagsError,
+            tagsBusy,
+            tagForm,
+            assignableTags,
+            tagStyle,
+            canRemoveTag,
+            openTags,
+            createCatalogTag,
+            updateCatalogTag,
+            deleteCatalogTag,
             canManageNetwork,
             theme,
             toggleTheme,
@@ -3678,6 +3770,14 @@ function formatDate(value) {
                         >
                             <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
                             Staff
+                        </button>
+
+                        <button
+                            class="nav-item"
+                            @click="openTags"
+                        >
+                            <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><path d="M7.5 7.5h.01"/></svg></span>
+                            Etiquetas
                         </button>
 
                         <button
@@ -4632,6 +4732,8 @@ function formatDate(value) {
                                                     )
                                                 "
                                                 :key="tag"
+                                                :class="{ 'tag-colored': tagStyle(tag) }"
+                                                :style="tagStyle(tag)"
                                             >
                                                 {{ tag }}
                                             </span>
@@ -4842,6 +4944,107 @@ function formatDate(value) {
                             </tr>
                         </tbody>
 
+                    </table>
+
+                </div>
+
+            </div>
+
+
+            <!-- CATALOGO DE ETIQUETAS -->
+
+            <div
+                v-if="tagsOpen && isAdmin"
+                class="config-overlay"
+                @click.self="tagsOpen = false"
+            >
+
+                <div class="config-modal users-modal">
+
+                    <div class="config-modal-head">
+                        <div>
+                            <small>SISTEMA</small>
+                            <h2>Etiquetas</h2>
+                        </div>
+                        <button class="config-close" @click="tagsOpen = false">✕</button>
+                    </div>
+
+                    <p class="tags-help">
+                        Los técnicos solo pueden asignar y quitar las etiquetas de este catálogo.
+                        El nombre no se puede cambiar después de creado. Si quitas una etiqueta
+                        del catálogo, las ONUs que ya la tienen la conservan.
+                    </p>
+
+                    <div v-if="tagsError" class="users-error">{{ tagsError }}</div>
+
+                    <form class="users-form tags-form" @submit.prevent="createCatalogTag">
+
+                        <strong>Nueva etiqueta</strong>
+
+                        <input v-model="tagForm.name" maxlength="64" placeholder="Nombre (p. ej. Cliente VIP)" required />
+                        <input v-model="tagForm.description" maxlength="160" placeholder="Descripción (opcional)" />
+
+                        <div class="tag-swatches">
+                            <button
+                                v-for="c in TAG_COLORS"
+                                :key="c"
+                                type="button"
+                                class="tag-swatch"
+                                :class="{ active: tagForm.color === c }"
+                                :style="{ '--sw': c }"
+                                :title="c"
+                                @click="tagForm.color = c"
+                            ></button>
+                            <input v-model="tagForm.color" type="color" title="Otro color" />
+                        </div>
+
+                        <button type="submit" :disabled="tagsBusy || !tagForm.name.trim()">+ Crear</button>
+
+                    </form>
+
+                    <div v-if="!tagCatalog.length" class="users-empty">
+                        Aún no hay etiquetas en el catálogo.
+                    </div>
+
+                    <table v-else class="users-table">
+                        <thead>
+                            <tr>
+                                <th>Etiqueta</th>
+                                <th>Descripción</th>
+                                <th>Color</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="t in tagCatalog" :key="t.id">
+                                <td>
+                                    <span class="tag-chip tag-colored" :style="tagStyle(t.name)">{{ t.name }}</span>
+                                </td>
+                                <td>
+                                    <input
+                                        class="tags-desc-input"
+                                        :value="t.description || ''"
+                                        maxlength="160"
+                                        placeholder="Sin descripción"
+                                        :disabled="tagsBusy"
+                                        @change="updateCatalogTag(t, { description: $event.target.value })"
+                                    />
+                                </td>
+                                <td>
+                                    <input
+                                        type="color"
+                                        :value="t.color"
+                                        :disabled="tagsBusy"
+                                        @change="updateCatalogTag(t, { color: $event.target.value })"
+                                    />
+                                </td>
+                                <td class="users-actions">
+                                    <button class="users-delete" :disabled="tagsBusy" @click="deleteCatalogTag(t)">
+                                        Quitar
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
                     </table>
 
                 </div>
@@ -5977,11 +6180,13 @@ function formatDate(value) {
                                         v-for="tag in selectedDevice.tags"
                                         :key="tag"
                                         class="tag-chip tag-editable"
+                                        :class="{ 'tag-colored': tagStyle(tag) }"
+                                        :style="tagStyle(tag)"
                                     >
                                         {{ tag }}
 
                                         <button
-                                            v-if="canManageNetwork"
+                                            v-if="canManageNetwork && canRemoveTag(tag)"
                                             @click="removeTag(tag)"
                                             :disabled="tagBusy"
                                             title="Eliminar etiqueta"
@@ -5998,14 +6203,28 @@ function formatDate(value) {
                                     Sin etiquetas
                                 </span>
 
-                                <div v-if="canManageNetwork" class="tag-add-row">
+                                <div v-if="canManageNetwork && (isAdmin || tagCatalog.length)" class="tag-add-row">
 
-                                    <input
-                                        v-model="newTag"
-                                        @keyup.enter="addTag"
-                                        maxlength="64"
-                                        placeholder="Nueva etiqueta"
-                                    />
+                                    <!-- Admin: del catálogo o libre. Técnico: solo del catálogo. -->
+                                    <template v-if="isAdmin">
+                                        <input
+                                            v-model="newTag"
+                                            @keyup.enter="addTag"
+                                            maxlength="64"
+                                            list="tag-catalog-list"
+                                            placeholder="Etiqueta del catálogo o nueva"
+                                        />
+                                        <datalist id="tag-catalog-list">
+                                            <option v-for="t in assignableTags" :key="t.id" :value="t.name">{{ t.description }}</option>
+                                        </datalist>
+                                    </template>
+
+                                    <select v-else v-model="newTag" :disabled="!assignableTags.length">
+                                        <option value="">{{ assignableTags.length ? 'Elegir etiqueta…' : 'Ya tiene todas las del catálogo' }}</option>
+                                        <option v-for="t in assignableTags" :key="t.id" :value="t.name">
+                                            {{ t.name }}{{ t.description ? ' — ' + t.description : '' }}
+                                        </option>
+                                    </select>
 
                                     <button
                                         @click="addTag"
@@ -6018,6 +6237,10 @@ function formatDate(value) {
                                     </button>
 
                                 </div>
+
+                                <small v-else-if="canManageNetwork" class="no-tags tag-hint">
+                                    El administrador aún no ha definido etiquetas para asignar.
+                                </small>
 
                             </div>
 
