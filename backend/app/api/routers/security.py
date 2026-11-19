@@ -294,10 +294,21 @@ async def security_module_service(
 
     try:
 
-        await genieacs.set_parameter_values(
-            device_id,
-            values
-        )
+        # ZTE: abrir/cerrar por WAN son reglas de una tabla, no parametros.
+        from app.services import zte_service_control
+
+        values, rule_changes = zte_service_control.split_pseudo(values)
+
+        if values:
+            await genieacs.set_parameter_values(
+                device_id,
+                values
+            )
+
+        if rule_changes:
+            await zte_service_control.apply(
+                genieacs, device_id, device, rule_changes
+            )
 
         confirmed = False
         current_service = None

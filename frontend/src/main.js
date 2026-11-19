@@ -2711,7 +2711,7 @@ function catvState(value) {
 
             if (
                 desired &&
-                securityData.value.firewall_grade !== 0
+                !securityData.value.wan_activation_allowed
             ) {
 
                 securityMessage.value =
@@ -7058,9 +7058,8 @@ function formatDate(value) {
                                             "
                                             :class="{
                                                 blocked:
-                                                    securityData
-                                                    .firewall_grade
-                                                    !== 0
+                                                    !securityData
+                                                    .wan_activation_allowed
                                             }"
                                         >
 
@@ -7280,9 +7279,8 @@ function formatDate(value) {
                                                                 !service
                                                                 .wan_enabled
                                                                 &&
-                                                                securityData
-                                                                .firewall_grade
-                                                                !== 0
+                                                                !securityData
+                                                                .wan_activation_allowed
                                                         }"
                                                         :disabled="
                                                             !service
@@ -7295,9 +7293,8 @@ function formatDate(value) {
                                                                 !service
                                                                 .wan_enabled
                                                                 &&
-                                                                securityData
-                                                                .firewall_grade
-                                                                !== 0
+                                                                !securityData
+                                                                .wan_activation_allowed
                                                             )
                                                         "
                                                         @click="
@@ -7311,9 +7308,8 @@ function formatDate(value) {
                                                             service
                                                             .wan_enabled
                                                                 ? 'ACTIVO'
-                                                                : securityData
-                                                                    .firewall_grade
-                                                                    !== 0
+                                                                : !securityData
+                                                                    .wan_activation_allowed
                                                                     ? 'BLOQUEADO'
                                                                     : 'APAGADO'
                                                         }}
