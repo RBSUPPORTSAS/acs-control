@@ -85,10 +85,13 @@ async def test_etiquetas_de_onu_quedan_registradas(client, monkeypatch):
     monkeypatch.setattr(genieacs, "add_tag", ok)
     monkeypatch.setattr(genieacs, "remove_tag", ok)
 
+    await login(client, "jefe")
+    assert (await client.post("/api/tags", json={"name": "cliente-vip"})).status_code == 201
+
     await login(client, "tecnico")
     assert (await client.post(f"/api/devices/{DID}/tags/cliente-vip")).status_code == 200
     assert (await client.delete(f"/api/devices/{DID}/tags/cliente-vip")).status_code == 200
-    evs = [e for e in await eventos(client) if e.action.startswith("ETIQUETA_")]
+    evs = [e for e in await eventos(client) if e.action in ("ETIQUETA_AGREGAR", "ETIQUETA_QUITAR")]
     assert [(e.action, e.username, e.target_id) for e in evs] == [
         ("ETIQUETA_AGREGAR", "tecnico", DEVICE_ID),
         ("ETIQUETA_QUITAR", "tecnico", DEVICE_ID),

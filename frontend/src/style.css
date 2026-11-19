@@ -4089,3 +4089,111 @@ button:disabled {
 .muted-dash {
     color: var(--text-faint);
 }
+
+/* CATALOGO DE ETIQUETAS */
+
+.tag-colored {
+    background: color-mix(in srgb, var(--tag-color) 18%, transparent) !important;
+    border: 1px solid color-mix(in srgb, var(--tag-color) 55%, transparent) !important;
+    color: var(--text) !important;
+}
+
+.tag-colored::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 5px;
+    border-radius: 50%;
+    background: var(--tag-color);
+    vertical-align: middle;
+}
+
+.tag-editable.tag-colored button {
+    color: var(--text-muted);
+}
+
+.tag-add-row select {
+    flex: 1;
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    padding: 7px 9px;
+    font-size: 10px;
+    background: var(--surface);
+    color: var(--text);
+}
+
+.tag-hint {
+    display: block;
+    margin-top: 10px;
+}
+
+.tags-help {
+    margin: 0 0 14px;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.tags-form {
+    grid-template-columns: 1fr 1.4fr auto auto;
+}
+
+.tag-swatches {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.users-form .tag-swatches button.tag-swatch {
+    flex: 0 0 22px;
+    box-sizing: border-box;
+    width: 22px !important;
+    min-width: 0 !important;
+    height: 22px !important;
+    background: var(--sw) !important;
+    padding: 0 !important;
+    border: 2px solid transparent !important;
+    border-radius: 50% !important;
+    cursor: pointer;
+}
+
+.users-form .tag-swatches button.tag-swatch.active {
+    border-color: var(--text) !important;
+    box-shadow: 0 0 0 2px var(--surface);
+}
+
+.tag-swatches input[type="color"],
+.users-table input[type="color"] {
+    width: 28px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.tags-desc-input {
+    width: 100%;
+    padding: 6px 9px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+}
+
+.tags-desc-input:hover,
+.tags-desc-input:focus {
+    border-color: var(--border-strong);
+    background: var(--surface);
+    outline: none;
+}
+
+@media (max-width: 760px) {
+    .tags-form {
+        grid-template-columns: 1fr;
+    }
+}

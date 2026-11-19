@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.core.config import settings
 from app.services import device_refresh
+from app.api.routers.tags import catalog_names, valid_tag_name
 
 
 router = APIRouter()
@@ -280,14 +281,16 @@ async def add_device_tag(
     device_id: str,
     tag: str,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_network),
 ):
 
-    tag = tag.strip()
+    tag = valid_tag_name(tag)
 
-    if not tag or len(tag) > 64 or "/" in tag:
+    # Admin puede usar etiquetas libres; technical solo las del catalogo.
+    if user.role != "admin" and tag not in await catalog_names(db):
         raise HTTPException(
-            status_code=400,
-            detail="Etiqueta no válida"
+            status_code=403,
+            detail="Solo puede asignar etiquetas del catálogo definido por el administrador",
         )
 
     device = await genieacs.get_device(device_id)
@@ -317,7 +320,16 @@ async def delete_device_tag(
     device_id: str,
     tag: str,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_network),
 ):
+
+    # Las etiquetas fuera del catalogo pueden activar presets de GenieACS:
+    # solo admin las quita.
+    if user.role != "admin" and tag not in await catalog_names(db):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo el administrador puede quitar etiquetas fuera del catálogo",
+        )
 
     device = await genieacs.get_device(device_id)
 

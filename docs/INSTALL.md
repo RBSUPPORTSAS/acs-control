@@ -87,13 +87,17 @@ Compruébelo siempre con `node --version` antes de compilar el frontend.
 
    | Rol | Para quién | Puede |
    |---|---|---|
-   | `admin` | Supervisión | Todo, incluidos Staff, Auditoría y Configuración |
-   | `technical` | Técnicos de red / NOC | Gestionar ONUs: WAN, Wi-Fi, CATV, seguridad y etiquetas |
+   | `admin` | Supervisión | Todo, incluidos Staff, Etiquetas, Auditoría y Configuración |
+   | `technical` | Técnicos de red / NOC | Gestionar ONUs: WAN, Wi-Fi, CATV, seguridad y etiquetas del catálogo |
    | `wifi` | Soporte de primer nivel | Ver la ONU y sus equipos conectados, y cambiar el Wi-Fi |
 
-5. **Abra una ONU** desde **Dispositivos**. La primera vez ACS Control lee sus datos de
+5. **Defina las etiquetas** en **Sistema → Etiquetas** (nombre, color y descripción).
+   Los técnicos solo pueden asignar y quitar etiquetas de ese catálogo; admin además
+   puede escribir etiquetas libres. Las etiquetas que no están en el catálogo (por
+   ejemplo, las que usan los presets de GenieACS) solo las quita admin.
+6. **Abra una ONU** desde **Dispositivos**. La primera vez ACS Control lee sus datos de
    la ONU (botón **Leer de la ONU**); según el modelo toma de 10 a 60 segundos.
-6. Consulte qué está probado en cada modelo en [Modelos compatibles](MODELOS.md).
+7. Consulte qué está probado en cada modelo en [Modelos compatibles](MODELOS.md).
 
 Cada usuario puede cambiar entre **modo oscuro y modo claro** con el botón de la barra
 lateral; la preferencia se recuerda en su navegador.

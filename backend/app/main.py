@@ -22,6 +22,7 @@ from app.api.routers import audit
 from app.api.routers import wan
 from app.api.routers import security
 from app.api.routers import users
+from app.api.routers import tags
 from app.services import refresh_sync
 
 
@@ -59,6 +60,7 @@ app.include_router(branding.router)
 # require_network dentro del router de dispositivos.
 logged_in = [Depends(require_user)]
 app.include_router(devices.router, dependencies=logged_in)
+app.include_router(tags.router, dependencies=logged_in)
 app.include_router(wifi.router, dependencies=logged_in)
 
 # WAN, CATV y seguridad: admin y technical.
