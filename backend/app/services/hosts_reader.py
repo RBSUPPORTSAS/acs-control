@@ -183,6 +183,7 @@ def _host(device, node):
     online = _to_int(_v(node, "X_ZTE-COM_OnlineDuration", "OnlineTime"))
     signal = _v(node, "PowerLevel", "X_ZTE-COM_RSSI", "SignalStrength")
     rate = _to_int(_v(node, "downLinkNegotiationRate"))  # Mbps (VSOL)
+    traffic = _traffic(node)
     rate_up = _to_int(_v(node, "upLinkNegotiationRate"))  # Mbps (VSOL)
 
     ip = _v(node, "IPAddress")
@@ -207,6 +208,29 @@ def _host(device, node):
         "signal_dbm": _dbm(signal),
         "link_rate": rate,
         "rx_rate": rate_up,
+        **traffic,
+    }
+
+
+# Consumo por equipo (ZTE F6600P fw V9.0.10P6N44), en Hosts.Host.{i}:
+#   X_ZTE-COM_RxRate / TxRate                    kbps actuales (Rx = lo que el
+#                                                equipo descarga, Tx = sube)
+#   X_ZTE-COM_TotalBytesReceived / TotalBytesSent  KiB acumulados pese al nombre
+# Verificado contra LANEthernetInterfaceConfig.4.Stats (bytes): Sent x1024 =
+# bytes que el puerto recibio del equipo, Received x1024 = bytes enviados.
+# Ojo: en AssociatedDevice los X_ZTE-COM_RxRate/TxRate son la velocidad
+# negociada, no el consumo; aqui solo se leen los de Hosts.
+def _traffic(node):
+    down = _to_int(_v(node, "X_ZTE-COM_RxRate"))
+    up = _to_int(_v(node, "X_ZTE-COM_TxRate"))
+    total_down = _to_int(_v(node, "X_ZTE-COM_TotalBytesReceived"))
+    total_up = _to_int(_v(node, "X_ZTE-COM_TotalBytesSent"))
+
+    return {
+        "download_kbps": down,
+        "upload_kbps": up,
+        "download_bytes": total_down * 1024 if total_down is not None else None,
+        "upload_bytes": total_up * 1024 if total_up is not None else None,
     }
 
 
@@ -264,6 +288,7 @@ def read_hosts(device):
                 else "GenieACS no tiene la lista de equipos conectados de esta ONU."
             ),
             "hosts": [],
+            "traffic_supported": False,
             "updated_at": None,
             "reported_count": None,
         }
@@ -301,6 +326,8 @@ def read_hosts(device):
         hosts.append(host)
 
     for host in hosts:
+        for key in ("download_kbps", "upload_kbps", "download_bytes", "upload_bytes"):
+            host.setdefault(key, None)
         host.setdefault("rx_rate", None)
         host.setdefault("snr_db", None)
         host.setdefault("noise_dbm", None)
@@ -313,6 +340,8 @@ def read_hosts(device):
     return {
         "supported": True,
         "reason": None,
+        # La ONU reporta consumo por equipo (hoy: ZTE F6600P).
+        "traffic_supported": any(h["download_kbps"] is not None for h in hosts),
         "hosts": hosts,
         "updated_at": newest.isoformat().replace("+00:00", "Z") if newest else None,
         "reported_count": reported,

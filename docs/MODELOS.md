@@ -203,6 +203,7 @@ Probado el 2026-11-11 en una ONU en servicio y el 2026-11-19 en una ONU de labor
 | Telnet y FTP (LAN) encender / apagar | ✅ `X_ZTE-COM_Telnet.Enable`, `X_ZTE-COM_FTP.Enable` |
 | Acceso remoto por WAN: HTTP, HTTPS, PING, Telnet, FTP | ✅ Encender / apagar, limitar a una IP o rango de origen y cambiar el puerto (HTTP, HTTPS, Telnet, FTP). Comprobado desde fuera: HTTP y HTTPS abren y cierran, y con una IP de origen ajena HTTP queda cerrado. SSH y TFTP no existen en este firmware. |
 | Equipos conectados con señal Wi-Fi | 👁 RSSI, SNR, ruido, velocidades, modo (11n/11ac) y ancho de canal desde `WLANConfiguration.{i}.AssociatedDevice` |
+| Consumo por equipo (Wi-Fi y cable) | 👁 Bajada/subida actual en kbps/Mbps y total acumulado, con botón "Ver en vivo" (relee cada 8 s). `Hosts.Host.{i}.X_ZTE-COM_RxRate`/`TxRate` (kbps; Rx = lo que el equipo descarga) y `X_ZTE-COM_TotalBytesReceived`/`Sent` (en KiB pese al nombre; verificado contra los bytes del puerto LAN). |
 | Nivel de firewall | 👁 `Firewall.Config` (Low/Middle/High), solo lectura. |
 | CATV | — |
 
