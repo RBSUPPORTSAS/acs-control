@@ -167,6 +167,9 @@ def branch_state(node):
         # aunque todos sus sub-objetos se recorrieron (VSOL V2804AX30-H:
         # DeviceInfo completa da too_many_commits).
         "structure": unwalked == 0 and (bool(node.get("_timestamp")) or walked > 0),
+        # Tabla leida y vacia (p. ej. X_ZTE-COM_PortBinding sin puertos
+        # asociados): no tiene parametros pero esta completa.
+        "empty": bool(node.get("_timestamp")) and not _children(node),
         "params": params,
         "values": values,
         "newest": newest,
@@ -197,6 +200,8 @@ def _without(node, prefix, skip):
 
 
 def _incomplete(state):
+    if state.get("empty"):
+        return False
     if not state["structure"] or state["params"] == 0:
         return True
     return state["values"] / state["params"] < COMPLETE_RATIO

@@ -139,3 +139,11 @@ def test_etiqueta_de_banda_con_wifi6():
     }}}}}
     labels = [b["label"] for b in friendly_bindings(d, f"{WLAN}1,{WLAN}5")]
     assert labels == ["2.4 GHz · Red24", "5 GHz · Red5"]
+
+
+def test_tabla_vacia_leida_cuenta_como_completa():
+    from app.services.device_refresh import branch_state, _incomplete
+    leida = {"_object": True, "_writable": True, "_timestamp": TS}
+    assert _incomplete(branch_state(leida)) is False
+    # Sin _timestamp GenieACS nunca la recorrio: sigue faltando.
+    assert _incomplete(branch_state({"_object": True, "_writable": True})) is True
