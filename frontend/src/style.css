@@ -4197,3 +4197,65 @@ button:disabled {
         grid-template-columns: 1fr;
     }
 }
+
+/* CONSUMO POR EQUIPO */
+
+.hosts-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.hosts-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-faint);
+}
+
+.hosts-live.on {
+    border-color: var(--success-border, #22c55e);
+}
+
+.hosts-live.on .live-dot {
+    background: var(--success, #22c55e);
+    animation: live-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .3; }
+}
+
+.traffic-cell {
+    white-space: nowrap;
+}
+
+.traffic-now {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.traffic-now em {
+    margin-left: 8px;
+    font-style: normal;
+    color: var(--text-muted);
+}
+
+.traffic-now.busy {
+    color: var(--success-text, #22c55e);
+}
+
+.traffic-cell small {
+    display: block;
+    margin-top: 3px;
+    color: var(--text-muted);
+    font-size: 11px;
+}

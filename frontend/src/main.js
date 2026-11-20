@@ -1307,6 +1307,60 @@ function closeDevice() {
             }
         }
 
+        // Consumo por equipo (ZTE): kbps hasta 1000, luego Mbps.
+        function formatKbps(kbps) {
+            if (kbps === null || kbps === undefined)
+                return '-'
+            if (kbps < 1000)
+                return `${kbps} kbps`
+            const mbps = kbps / 1000
+            return `${mbps < 10 ? mbps.toFixed(1) : Math.round(mbps)} Mbps`
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === null || bytes === undefined)
+                return '-'
+            const units = ['B', 'KB', 'MB', 'GB', 'TB']
+            let value = bytes
+            let i = 0
+            while (value >= 1000 && i < units.length - 1) {
+                value /= 1000
+                i++
+            }
+            return `${value < 10 && i ? value.toFixed(1) : Math.round(value)} ${units[i]}`
+        }
+
+        // "En vivo": relee equipos y consumo cada 8 s mientras la pestaña
+        // Equipos esté abierta (cada lectura es una sesión TR-069 corta).
+        const hostsLive = ref(false)
+        let hostsLiveTimer = null
+
+        function stopHostsLive() {
+            hostsLive.value = false
+            if (hostsLiveTimer) {
+                clearInterval(hostsLiveTimer)
+                hostsLiveTimer = null
+            }
+        }
+
+        function toggleHostsLive() {
+            if (hostsLive.value) {
+                stopHostsLive()
+                return
+            }
+            hostsLive.value = true
+            const deviceId = selectedDevice.value?.id
+            refreshHosts()
+            hostsLiveTimer = setInterval(() => {
+                if (activeTab.value !== 'equipos' || selectedDevice.value?.id !== deviceId) {
+                    stopHostsLive()
+                    return
+                }
+                if (!hostsRefreshing.value)
+                    refreshHosts()
+            }, 8000)
+        }
+
         function hostRate(h) {
             if (!h.link_rate && !h.rx_rate)
                 return ''
@@ -3527,6 +3581,10 @@ function formatDate(value) {
             hostDuration,
             hostsRefreshing,
             refreshHosts,
+            hostsLive,
+            toggleHostsLive,
+            formatKbps,
+            formatBytes,
             hostRate,
 
             catv,
@@ -6669,13 +6727,25 @@ function formatDate(value) {
 
                                     <div class="hosts-head">
                                         <h3>Equipos conectados</h3>
-                                        <button
-                                            class="hosts-refresh"
-                                            :disabled="hostsRefreshing"
-                                            @click="refreshHosts"
-                                        >
-                                            {{ hostsRefreshing ? 'Leyendo…' : '↻ Actualizar equipos y señal' }}
-                                        </button>
+                                        <div class="hosts-actions">
+                                            <button
+                                                v-if="hosts && hosts.traffic_supported"
+                                                class="hosts-refresh hosts-live"
+                                                :class="{ on: hostsLive }"
+                                                :title="hostsLive ? 'Detener' : 'Releer consumo y señal cada 8 segundos'"
+                                                @click="toggleHostsLive"
+                                            >
+                                                <i class="live-dot"></i>
+                                                {{ hostsLive ? 'En vivo' : 'Ver en vivo' }}
+                                            </button>
+                                            <button
+                                                class="hosts-refresh"
+                                                :disabled="hostsRefreshing"
+                                                @click="refreshHosts"
+                                            >
+                                                {{ hostsRefreshing ? 'Leyendo…' : '↻ Actualizar equipos y señal' }}
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <div v-if="hostsError" class="error-message">
@@ -6714,6 +6784,7 @@ function formatDate(value) {
                                                         <th>MAC</th>
                                                         <th>Conexión</th>
                                                         <th>Señal Wi-Fi</th>
+                                                        <th v-if="hosts.traffic_supported">Consumo actual</th>
                                                         <th>Conectado</th>
                                                     </tr>
                                                 </thead>
@@ -6755,6 +6826,18 @@ function formatDate(value) {
                                                                     <template v-if="h.snr_db !== null"> · SNR {{ h.snr_db }} dB</template>
                                                                 </small>
                                                                 <small v-if="hostRate(h)">{{ hostRate(h) }}</small>
+                                                            </template>
+                                                            <span v-else class="muted-dash">-</span>
+                                                        </td>
+                                                        <td v-if="hosts.traffic_supported" class="traffic-cell">
+                                                            <template v-if="h.active !== false && h.download_kbps !== null">
+                                                                <span class="traffic-now" :class="{ busy: (h.download_kbps || 0) + (h.upload_kbps || 0) >= 1000 }">
+                                                                    ↓ {{ formatKbps(h.download_kbps) }}
+                                                                    <em>↑ {{ formatKbps(h.upload_kbps) }}</em>
+                                                                </span>
+                                                                <small v-if="h.download_bytes !== null">
+                                                                    Total ↓ {{ formatBytes(h.download_bytes) }} · ↑ {{ formatBytes(h.upload_bytes) }}
+                                                                </small>
                                                             </template>
                                                             <span v-else class="muted-dash">-</span>
                                                         </td>
