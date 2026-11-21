@@ -30,8 +30,11 @@ class GenieACSClient:
         self.base_url = settings.genieacs_nbi_url.rstrip("/")
         self.timeout = settings.genieacs_timeout
 
-    async def get_devices(self, limit=100, projection=None):
+    async def get_devices(self, limit=100, projection=None, query=None):
         params = {"limit": limit}
+
+        if query:
+            params["query"] = json.dumps(query)
 
         if projection:
             params["projection"] = ",".join(projection)
