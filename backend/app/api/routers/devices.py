@@ -20,17 +20,108 @@ from app.api.routers.tags import catalog_names, valid_tag_name
 router = APIRouter()
 
 
-@router.get("/api/devices")
+# Campos de identidad que GenieACS puede filtrar rapido (estan en el
+# documento de la ONU, no en el arbol de parametros). Un $regex sobre un
+# parametro (p. ej. SoftwareVersion) puede dejar la consulta colgada.
+SEARCH_FIELDS = (
+    "_id",
+    "_deviceId._SerialNumber",
+    "_deviceId._ProductClass",
+    "_deviceId._Manufacturer",
+    "_deviceId._OUI",
+    "_tags",
+)
+
+def search_regex(text):
+    """Expresion para buscar `text` en GenieACS sin distinguir mayusculas.
+
+    GenieACS 1.2 se cuelga (~26 s y cierra la conexion) con dos formas de
+    $regex: con "$options": "i" cuando no hay coincidencias, y cuando el
+    texto son solo digitos ("260205", "9782"), que parece leer como numero.
+    Por eso: sin $options (cada letra va como [aA]) y envuelto en (?:...).
+    """
+
+    import re
+
+    out = []
+    for ch in text:
+        if ch.isalpha() and ch.lower() != ch.upper():
+            out.append(f"[{ch.lower()}{ch.upper()}]")
+        else:
+            out.append(re.escape(ch))
+    return "(?:" + "".join(out) + ")"
+
+
+# Para IP TR-069 y firmware se revisan, ademas, hasta tantas ONUs.
+SEARCH_SCAN_LIMIT = 2000
+
+
+def _matches(device, search):
+    values = [
+        device.get("id"),
+        device.get("manufacturer"),
+        device.get("product_class"),
+        device.get("serial_number"),
+        device.get("software_version"),
+        device.get("oui"),
+        device.get("tr069_ip"),
+    ]
+
+    tags = device.get("tags") or []
+
+    if isinstance(tags, (list, tuple, set)):
+        values.extend(tags)
+    else:
+        values.append(tags)
+
+    return any(
+        search in str(value).lower()
+        for value in values
+        if value is not None
+    )
+
+
+@router.get("/api/devices", summary="Listar o buscar ONUs")
 async def devices(
     limit: int = Query(default=100, ge=1, le=2000),
-    q: str | None = Query(default=None),
+    q: str | None = Query(
+        default=None,
+        description="Texto a buscar: serial (o sus ultimos digitos), modelo, fabricante, OUI, etiqueta, IP TR-069 o firmware.",
+    ),
 ):
+    """Sin q: las primeras `limit` ONUs. Con q: las que coinciden, hasta `limit`.
+
+    Antes la busqueda filtraba solo dentro de las primeras `limit` ONUs: con
+    limit=20 no encontraba una ONU que estuviera mas adelante.
+    """
+
+    import re
+
+    search = (q or "").lower().strip()
 
     try:
-        raw_devices = await genieacs.get_devices(
-            limit=limit,
-            projection=NORMALIZE_PROJECTION,
-        )
+        if not search:
+            raw_devices = await genieacs.get_devices(
+                limit=limit,
+                projection=NORMALIZE_PROJECTION,
+            )
+        else:
+            pattern = {"$regex": search_regex(search)}
+            raw_devices = await genieacs.get_devices(
+                limit=limit,
+                projection=NORMALIZE_PROJECTION,
+                query={"$or": [{field: pattern} for field in SEARCH_FIELDS]},
+            )
+
+            # IP TR-069 y firmware: no se filtran en GenieACS (ver arriba).
+            if len(raw_devices) < limit:
+                seen = {d.get("_id") for d in raw_devices}
+                for device in await genieacs.get_devices(
+                    limit=SEARCH_SCAN_LIMIT,
+                    projection=NORMALIZE_PROJECTION,
+                ):
+                    if device.get("_id") not in seen:
+                        raw_devices.append(device)
 
     except Exception as exc:
         raise HTTPException(
@@ -43,38 +134,8 @@ async def devices(
         for device in raw_devices
     ]
 
-    if q:
-        search = q.lower().strip()
-
-        def matches(device):
-            values = [
-                device.get("id"),
-                device.get("manufacturer"),
-                device.get("product_class"),
-                device.get("serial_number"),
-                device.get("software_version"),
-                device.get("oui"),
-                device.get("tr069_ip"),
-            ]
-
-            tags = device.get("tags") or []
-
-            if isinstance(tags, (list, tuple, set)):
-                values.extend(tags)
-            else:
-                values.append(tags)
-
-            return any(
-                search in str(value).lower()
-                for value in values
-                if value is not None
-            )
-
-        normalized = [
-            device
-            for device in normalized
-            if matches(device)
-        ]
+    if search:
+        normalized = [d for d in normalized if _matches(d, search)][:limit]
 
     return {
         "count": len(normalized),

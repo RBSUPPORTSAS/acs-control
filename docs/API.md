@@ -58,7 +58,7 @@ en la URL (`encodeURIComponent` / `urllib.parse.quote(id, safe="")`).
 
 | Para | Método y ruta |
 |---|---|
-| Buscar ONUs | `GET /api/devices?q=<serial, modelo, IP…>&limit=100` |
+| Buscar ONUs (también por los últimos dígitos del serial) | `GET /api/devices?q=<serial, modelo, IP, firmware, etiqueta>&limit=100` |
 | Ficha de una ONU (estado de datos y avisos de GenieACS) | `GET /api/devices/{id}` |
 | Pedir datos frescos a la ONU | `POST /api/devices/{id}/refresh` (`?force=true` relee todo) |
 | Ver el avance de esa lectura | `GET /api/devices/{id}/refresh` |
