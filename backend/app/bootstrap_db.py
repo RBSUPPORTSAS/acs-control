@@ -4,6 +4,7 @@ from sqlalchemy import text
 
 from app.core.database import engine
 from app.models.base import Base
+from app.models.api_token import ApiToken
 from app.models.app_setting import AppSetting
 from app.models.audit import AuditLog
 from app.models.device_profile import DeviceProfile

@@ -69,12 +69,16 @@ siga [docs/install/linux.md](docs/install/linux.md).
 
 ## API documentation
 
-When the FastAPI backend is running:
+Every endpoint requires a session or an API token (`Authorization: Bearer acs_...`),
+except login and the operator logo. Admins create tokens in **Sistema → Tokens API**.
+With a session or token:
 
 ```text
-/docs
-/openapi.json
+/api/docs          interactive documentation (Swagger UI)
+/api/openapi.json  OpenAPI 3 specification (JSON), ready for an agent
 ```
+
+See [docs/API.md](docs/API.md) (Spanish) for the agent guide.
 
 ## Security
 

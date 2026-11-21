@@ -30,6 +30,11 @@ async def root():
 @router.get("/api/health")
 async def health(user: User | None = Depends(get_optional_user)):
 
+    # Sin sesion ni token: solo "la API responde" (para monitoreo). El estado
+    # de PostgreSQL, Redis y GenieACS requiere sesion o token.
+    if user is None:
+        return {"api": True}
+
     result = {
         "api": True,
         "postgresql": False,

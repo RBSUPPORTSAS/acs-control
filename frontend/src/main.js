@@ -3289,6 +3289,87 @@ function formatDate(value) {
             return tagsAction(() => usersRequest(`/api/tags/${tag.id}`, { method: 'DELETE' }))
         }
 
+        // Tokens API (agentes y scripts): solo admin desde su sesión.
+        const tokensOpen = ref(false)
+        const apiTokens = ref([])
+        const tokensError = ref('')
+        const tokensBusy = ref(false)
+        const newApiToken = ref(null)
+        const tokenCopied = ref(false)
+        const emptyTokenForm = () => ({ name: '', role: 'technical', expires_days: 90 })
+        const tokenForm = ref(emptyTokenForm())
+
+        async function loadApiTokens() {
+            try {
+                apiTokens.value = (await usersRequest('/api/tokens')).tokens
+            } catch (e) {
+                tokensError.value = e.message
+            }
+        }
+
+        async function openTokens() {
+            tokensOpen.value = true
+            tokensError.value = ''
+            newApiToken.value = null
+            tokenForm.value = emptyTokenForm()
+            await loadApiTokens()
+        }
+
+        function closeTokens() {
+            tokensOpen.value = false
+            newApiToken.value = null
+        }
+
+        async function createApiToken() {
+            tokensBusy.value = true
+            tokensError.value = ''
+            tokenCopied.value = false
+            try {
+                const body = { ...tokenForm.value, name: tokenForm.value.name.trim() }
+                if (body.expires_days === 0)
+                    body.expires_days = null
+                newApiToken.value = await usersRequest('/api/tokens', { method: 'POST', body: JSON.stringify(body) })
+                tokenForm.value = emptyTokenForm()
+                await loadApiTokens()
+            } catch (e) {
+                tokensError.value = e.message
+            } finally {
+                tokensBusy.value = false
+            }
+        }
+
+        async function revokeApiToken(t) {
+            if (!confirm(`¿Revocar el token "${t.name}"? Lo que lo use dejará de funcionar al instante.`))
+                return
+            tokensBusy.value = true
+            tokensError.value = ''
+            try {
+                await usersRequest(`/api/tokens/${t.id}`, { method: 'DELETE' })
+                await loadApiTokens()
+            } catch (e) {
+                tokensError.value = e.message
+            } finally {
+                tokensBusy.value = false
+            }
+        }
+
+        async function copyApiToken() {
+            try {
+                await navigator.clipboard.writeText(newApiToken.value.token)
+                tokenCopied.value = true
+            } catch (e) {
+                tokenCopied.value = false
+            }
+        }
+
+        function tokenState(t) {
+            if (t.revoked)
+                return 'Revocado'
+            if (t.expires_at && new Date(t.expires_at) <= new Date())
+                return 'Vencido'
+            return 'Activo'
+        }
+
         async function openUsers() {
             usersOpen.value = true
             userForm.value = emptyUserForm()
@@ -3513,6 +3594,19 @@ function formatDate(value) {
             loginError,
             isAdmin,
             roleLabel,
+            tokensOpen,
+            apiTokens,
+            tokensError,
+            tokensBusy,
+            newApiToken,
+            tokenCopied,
+            tokenForm,
+            openTokens,
+            closeTokens,
+            createApiToken,
+            revokeApiToken,
+            copyApiToken,
+            tokenState,
             TAG_COLORS,
             tagCatalog,
             tagsOpen,
@@ -3882,6 +3976,14 @@ function formatDate(value) {
                         >
                             <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><path d="M7.5 7.5h.01"/></svg></span>
                             Etiquetas
+                        </button>
+
+                        <button
+                            class="nav-item"
+                            @click="openTokens"
+                        >
+                            <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2M17 6l3 3M14.5 8.5l2 2"/></svg></span>
+                            Tokens API
                         </button>
 
                         <button
@@ -5048,6 +5150,119 @@ function formatDate(value) {
                             </tr>
                         </tbody>
 
+                    </table>
+
+                </div>
+
+            </div>
+
+
+            <!-- TOKENS API -->
+
+            <div
+                v-if="tokensOpen && isAdmin"
+                class="config-overlay"
+                @click.self="closeTokens"
+            >
+
+                <div class="config-modal users-modal">
+
+                    <div class="config-modal-head">
+                        <div>
+                            <small>SISTEMA</small>
+                            <h2>Tokens API</h2>
+                        </div>
+                        <button class="config-close" @click="closeTokens">✕</button>
+                    </div>
+
+                    <p class="tags-help">
+                        Para agentes y scripts. Se envían en la cabecera
+                        <code>Authorization: Bearer acs_…</code> y tienen los permisos del rol elegido.
+                        Todo lo que hagan queda en la auditoría como <code>api:nombre</code>.
+                    </p>
+
+                    <div class="api-links">
+                        <a href="/api/docs" target="_blank" rel="noopener">Documentación de la API ↗</a>
+                        <a href="/api/openapi.json" download="acs-control-openapi.json">Descargar especificación JSON (OpenAPI)</a>
+                    </div>
+
+                    <div v-if="tokensError" class="users-error">{{ tokensError }}</div>
+
+                    <div v-if="newApiToken" class="token-reveal">
+                        <strong>Token "{{ newApiToken.name }}" creado. Cópielo ahora: no se vuelve a mostrar.</strong>
+                        <div class="token-reveal-row">
+                            <code>{{ newApiToken.token }}</code>
+                            <button type="button" @click="copyApiToken">{{ tokenCopied ? '✓ Copiado' : 'Copiar' }}</button>
+                        </div>
+                    </div>
+
+                    <form class="users-form tokens-form" @submit.prevent="createApiToken">
+
+                        <strong>Nuevo token</strong>
+
+                        <input v-model="tokenForm.name" maxlength="64" placeholder="Nombre (p. ej. agente-noc)" required />
+
+                        <select v-model="tokenForm.role">
+                            <option value="technical">Técnico</option>
+                            <option value="wifi">Soporte Wi-Fi</option>
+                            <option value="admin">Admin</option>
+                        </select>
+
+                        <select v-model.number="tokenForm.expires_days">
+                            <option :value="30">Vence en 30 días</option>
+                            <option :value="90">Vence en 90 días</option>
+                            <option :value="365">Vence en 1 año</option>
+                            <option :value="0">Sin vencimiento</option>
+                        </select>
+
+                        <button type="submit" :disabled="tokensBusy || !tokenForm.name.trim()">+ Crear</button>
+
+                    </form>
+
+                    <div v-if="!apiTokens.length" class="users-empty">
+                        Aún no hay tokens.
+                    </div>
+
+                    <table v-else class="users-table">
+                        <thead>
+                            <tr>
+                                <th>Token</th>
+                                <th>Rol</th>
+                                <th>Creado</th>
+                                <th>Vence</th>
+                                <th>Último uso</th>
+                                <th>Estado</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="t in apiTokens" :key="t.id" :class="{ inactive: tokenState(t) !== 'Activo' }">
+                                <td>
+                                    <strong>{{ t.name }}</strong>
+                                    <small class="mono">{{ t.prefix }}…</small>
+                                </td>
+                                <td>{{ roleLabel(t.role) }}</td>
+                                <td>
+                                    {{ new Date(t.created_at).toLocaleDateString() }}
+                                    <small>{{ t.created_by }}</small>
+                                </td>
+                                <td>{{ t.expires_at ? new Date(t.expires_at).toLocaleDateString() : 'Nunca' }}</td>
+                                <td>{{ t.last_used_at ? new Date(t.last_used_at).toLocaleString() : 'Nunca' }}</td>
+                                <td>
+                                    <span :class="tokenState(t) === 'Activo' ? 'text-green' : 'text-red'">{{ tokenState(t) }}</span>
+                                </td>
+                                <td class="users-actions">
+                                    <button
+                                        v-if="!t.revoked"
+                                        class="users-delete"
+                                        :disabled="tokensBusy"
+                                        @click="revokeApiToken(t)"
+                                    >
+                                        Revocar
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
                     </table>
 
                 </div>

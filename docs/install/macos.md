@@ -40,7 +40,7 @@ Al terminar:
 | Servicio | URL |
 |---|---|
 | Interfaz | http://127.0.0.1:4173 |
-| API (documentación) | http://127.0.0.1:8000/docs |
+| API (documentación, con sesión iniciada) | http://127.0.0.1:4173/api/docs |
 
 ## Usuarios (Staff)
 
