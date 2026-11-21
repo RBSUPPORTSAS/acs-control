@@ -4259,3 +4259,72 @@ button:disabled {
     color: var(--text-muted);
     font-size: 11px;
 }
+
+/* GENIEACS DETENIDO */
+
+.genie-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 0 28px 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--warning-border);
+    border-radius: 10px;
+    background: var(--warning-soft);
+    color: var(--text);
+    font-size: 13px;
+}
+
+.genie-banner.ok {
+    border-color: var(--success-border);
+    background: var(--success-soft);
+}
+
+.genie-text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.genie-text strong {
+    color: var(--warning-text);
+}
+
+.genie-text small {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.genie-banner.ok .genie-result {
+    color: var(--success-text);
+    font-weight: 600;
+}
+
+.genie-unblock {
+    padding: 8px 16px;
+    border: 1px solid var(--warning-border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--warning-text);
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.genie-unblock:hover:not(:disabled) {
+    background: var(--warning-soft);
+}
+
+.genie-unblock:disabled {
+    opacity: .6;
+    cursor: default;
+}
+
+@media (max-width: 760px) {
+    .genie-banner {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
