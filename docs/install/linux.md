@@ -234,6 +234,21 @@ Desde otra terminal:
 curl -s http://127.0.0.1:8000/api/health | jq .
 ```
 
+Sin sesión ni token solo confirma que la API responde:
+
+```json
+{
+  "api": true
+}
+```
+
+El estado de PostgreSQL, Redis y GenieACS se ve con sesión de admin (Sistema →
+Configuración) o con un token API (ver [API para agentes](../API.md)):
+
+```bash
+curl -s -H "Authorization: Bearer acs_..." http://127.0.0.1:8000/api/health | jq .
+```
+
 Respuesta esperada:
 
 ```json
@@ -333,13 +348,8 @@ server {
         client_max_body_size 2m;
     }
 
-    location /docs {
-        proxy_pass http://127.0.0.1:8000/docs;
-    }
-
-    location /openapi.json {
-        proxy_pass http://127.0.0.1:8000/openapi.json;
-    }
+    # La documentacion de la API (/api/docs) y su especificacion JSON
+    # (/api/openapi.json) pasan por location /api/ y exigen sesion o token.
 }
 ```
 
