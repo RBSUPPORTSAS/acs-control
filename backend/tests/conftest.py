@@ -99,6 +99,14 @@ async def client(monkeypatch):
     monkeypatch.setattr(genieacs, "get_devices", fake_get_devices)
     monkeypatch.setattr(genieacs, "get_device", fake_get_device)
 
+    # Sin GenieACS real: sin faults ni tareas salvo que la prueba los simule
+    # (la ficha consulta los faults de presets en cada apertura).
+    async def no_items(device_id):
+        return []
+
+    monkeypatch.setattr(genieacs, "get_faults", no_items)
+    monkeypatch.setattr(genieacs, "get_tasks", no_items)
+
     async with Session() as db:
         db.add(User(username="jefe", role="admin", password_hash=hash_password(PASSWORDS["jefe"])))
         db.add(User(username="tecnico", role="technical", password_hash=hash_password(PASSWORDS["tecnico"])))

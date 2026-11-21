@@ -47,6 +47,10 @@ createApp({
 
         // Lectura de datos de la ONU bajo demanda (refreshObject, solo lectura)
         const dataStatus = ref(null)
+        // Faults de presets de GenieACS que dejan la cola de la ONU detenida.
+        const genieHealth = ref(null)
+        const genieBusy = ref(false)
+        const genieMessage = ref('')
         const certification = ref(null)
         // Modelo no certificado: solo se muestran datos, sin gestión.
         const readOnly = computed(() => certification.value?.certified === false)
@@ -961,6 +965,8 @@ async function loadHealth() {
 
                     dataStatus.value = data.data_status || null
                     certification.value = data.certification || null
+                    genieHealth.value = data.genieacs || null
+                    genieMessage.value = ''
                 }
 
             } catch (e) {
@@ -998,6 +1004,39 @@ async function loadHealth() {
                     return BRANCH_LABELS[parts[i]]
             }
             return parts[parts.length - 1] || path
+        }
+
+        async function unblockGenie() {
+            if (!selectedDevice.value || genieBusy.value)
+                return
+            const deviceId = selectedDevice.value.id
+            genieBusy.value = true
+            genieMessage.value = ''
+            try {
+                const r = await fetch(
+                    `/api/devices/${encodeURIComponent(deviceId)}/genieacs/unblock`,
+                    { method: 'POST' }
+                )
+                const data = await r.json().catch(() => ({}))
+                if (!r.ok)
+                    throw new Error(data.detail || `HTTP ${r.status}`)
+                if (selectedDevice.value?.id !== deviceId)
+                    return
+                genieHealth.value = data
+                if (data.answered) {
+                    genieMessage.value = data.pending_tasks
+                        ? `GenieACS ya procesa la cola (${data.pending_tasks} tareas pendientes).`
+                        : 'Listo: GenieACS volvió a procesar la ONU.'
+                    // Releer lo que falte ahora que la cola avanza.
+                    startRefresh()
+                } else {
+                    genieMessage.value = 'Se borró el error, pero la ONU no respondió. Se procesará en su próximo reporte.'
+                }
+            } catch (e) {
+                genieMessage.value = `No fue posible destrabar: ${e.message}`
+            } finally {
+                genieBusy.value = false
+            }
         }
 
         function stopRefresh() {
@@ -1046,6 +1085,7 @@ async function loadHealth() {
             selectedDevice.value = data.device || selectedDevice.value
             dataStatus.value = data.data_status || null
             certification.value = data.certification || null
+            genieHealth.value = data.genieacs || null
 
             // La pestaña abierta se recarga sola si antes no tenía datos y no hay
             // un formulario en uso; si no, se ofrece recargarla para no borrar
@@ -3660,6 +3700,10 @@ function formatDate(value) {
             openDevice,
             closeDevice,
             dataStatus,
+            genieHealth,
+            genieBusy,
+            genieMessage,
+            unblockGenie,
             certification,
             readOnly,
             refreshState,
@@ -5956,6 +6000,35 @@ function formatDate(value) {
                         class="uncertified-banner"
                     >
                         ⚠ {{ certification.message }}
+                    </div>
+
+                    <div
+                        v-if="(genieHealth && genieHealth.blocked) || genieMessage"
+                        class="genie-banner"
+                        :class="{ ok: genieHealth && !genieHealth.blocked }"
+                    >
+                        <div class="genie-text">
+                            <template v-if="genieHealth && genieHealth.blocked">
+                                <strong>⚠ GenieACS tiene detenida esta ONU</strong>
+                                <span v-for="f in genieHealth.faults" :key="f.channel">
+                                    {{ f.message }} · {{ f.code }}<template v-if="f.retries"> · {{ f.retries }} {{ f.retries === 1 ? 'reintento' : 'reintentos' }}</template>
+                                </span>
+                                <small>
+                                    Mientras el error siga, GenieACS no procesa lecturas ni cambios
+                                    <template v-if="genieHealth.pending_tasks"> ({{ genieHealth.pending_tasks }} en cola)</template>.
+                                    Destrabar borra el error y despierta la ONU; no cambia nada en el equipo.
+                                </small>
+                            </template>
+                            <span v-if="genieMessage" class="genie-result">{{ genieMessage }}</span>
+                        </div>
+                        <button
+                            v-if="genieHealth && genieHealth.blocked && canManageNetwork"
+                            class="genie-unblock"
+                            :disabled="genieBusy"
+                            @click="unblockGenie"
+                        >
+                            {{ genieBusy ? 'Destrabando…' : 'Destrabar en GenieACS' }}
+                        </button>
                     </div>
 
                     <div

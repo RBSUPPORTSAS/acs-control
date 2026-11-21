@@ -122,10 +122,53 @@ async def device_detail(
         ),
     }
 
+    # Errores de presets de GenieACS que dejan la ONU sin procesar tareas.
+    try:
+        from app.services import genie_health
+
+        response["genieacs"] = await genie_health.health(device_id)
+    except Exception:
+        response["genieacs"] = None
+
     if raw:
         response["raw"] = device
 
     return response
+
+
+@router.post("/api/devices/{device_id}/genieacs/unblock", dependencies=[Depends(require_network)])
+async def device_genieacs_unblock(
+    device_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Borra los faults de presets de GenieACS y despierta la ONU.
+
+    No cambia nada en la ONU: solo deja que GenieACS vuelva a procesar la
+    cola de tareas (lecturas y cambios pendientes).
+    """
+
+    from app.services import genie_health
+
+    device = await genieacs.get_device(device_id)
+
+    if not device:
+        raise HTTPException(status_code=404, detail="ONU no encontrada")
+
+    before = await genie_health.health(device_id)
+
+    try:
+        result = await genie_health.unblock(device_id, device)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"No fue posible destrabar en GenieACS: {str(exc) or type(exc).__name__}")
+
+    await add_audit(
+        db, action="GENIEACS_DESTRABAR", target_id=device_id,
+        before={"errores": [f["channel"] + " " + str(f["code"]) for f in before["faults"]], "tareas_en_cola": before["pending_tasks"]},
+        after={"borrados": result["cleared"], "onu_respondio": result["answered"], "tareas_en_cola": result["pending_tasks"]},
+        result="CONFIRMADO" if result["answered"] else "PENDIENTE",
+    )
+
+    return result
 
 
 @router.get("/api/devices/{device_id}/hosts")
