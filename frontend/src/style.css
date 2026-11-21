@@ -4390,3 +4390,14 @@ button:disabled {
         grid-template-columns: 1fr;
     }
 }
+
+.token-reveal-row button {
+    padding: 8px 16px;
+    border: 1px solid var(--success-border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--success-text);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
