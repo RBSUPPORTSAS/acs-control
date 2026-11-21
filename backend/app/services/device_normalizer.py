@@ -17,6 +17,11 @@ def get_parameter(device: dict, path: str):
     if isinstance(current, dict) and "_value" in current:
         return current.get("_value")
 
+    # Parametro que GenieACS conoce pero cuyo valor nunca se leyo: no hay
+    # dato (antes se devolvia el nodo y la interfaz mostraba {'_object': ...}).
+    if isinstance(current, dict) and current.get("_object") is False:
+        return None
+
     return current
 
 

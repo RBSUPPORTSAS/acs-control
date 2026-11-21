@@ -89,16 +89,115 @@ KNOWN_HEAVY = {
 }
 
 
-def known_heavy(device):
-    """(leer por partes, partes que se omiten) segun el firmware."""
+# Parametros que la ONU no puede leer: un getParameterValues que los incluye
+# termina en cwmp.9002 y arrastra toda la rama (VSOL V2802ACT fw
+# V2.1.00-260205: WLANConfiguration.1-4.PossibleChannels, las redes de 5 GHz;
+# validado 2026-11-21). Esas ramas se leen pidiendo los valores uno a uno sin
+# esos parametros. Ademas de estos, se aprenden de los faults (BAD_KEY).
+KNOWN_BAD_PARAMS = {
+    "V2.1.00-260205": tuple(
+        f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.PossibleChannels"
+        for i in (1, 2, 3, 4)
+    ),
+}
 
+BAD_KEY = "acs:refresh_badparam:{}"
+BAD_TTL = 7 * 24 * 3600
+
+# Tareas que ACS-Control encola para leer (refreshObject y, al esquivar un
+# parametro, getParameterValues).
+READ_TASKS = {"refreshObject", "getParameterValues"}
+GPV_CHUNK = 100
+
+
+def _firmware(device):
     root = data_root(device)
     version = (
         ((device or {}).get(root or "", {}).get("DeviceInfo") or {})
         .get("SoftwareVersion", {}) or {}
     )
-    version = version.get("_value") if isinstance(version, dict) else None
-    skip = KNOWN_HEAVY.get(version)
+    return version.get("_value") if isinstance(version, dict) else None
+
+
+def known_bad(device):
+    return tuple(KNOWN_BAD_PARAMS.get(_firmware(device)) or ())
+
+
+def _param_path(text, root_names=("InternetGatewayDevice.", "Device.")):
+    """La ruta del parametro que nombra un fault, o None."""
+
+    text = str(text or "").strip()
+    if (
+        text.startswith(root_names)
+        and not text.endswith(".")
+        and " " not in text
+        and len(text) < 256
+    ):
+        return text
+    return None
+
+
+def _node_at(device, path):
+    node = device
+    for key in path.split("."):
+        node = node.get(key) if isinstance(node, dict) else None
+    return node if isinstance(node, dict) else None
+
+
+def avoid_tasks(device, branch, bad):
+    """Tareas para leer branch sin tocar los parametros de bad.
+
+    Los sub-objetos que no contienen un parametro malo se leen con
+    refreshObject; los que si, se recorren y sus parametros sueltos se piden
+    con getParameterValues, salvo los malos.
+    """
+
+    tasks, params = [], []
+
+    def walk(path):
+        node = _node_at(device, path)
+        if node is None:
+            return
+        for key, child in _children(node).items():
+            full = f"{path}.{key}"
+            if _is_param(child):
+                if full not in bad:
+                    params.append(full)
+            elif any(b.startswith(full + ".") for b in bad):
+                walk(full)
+            else:
+                tasks.append({"name": "refreshObject", "objectName": full})
+
+    walk(branch)
+
+    for i in range(0, len(params), GPV_CHUNK):
+        tasks.append({"name": "getParameterValues", "parameterNames": params[i:i + GPV_CHUNK]})
+
+    return tasks
+
+
+def task_branch(task):
+    """Rama que lee una tarea (objectName o prefijo comun de sus parametros)."""
+
+    if task.get("objectName"):
+        return str(task["objectName"]).rstrip(".")
+    names = [str(n) for n in task.get("parameterNames") or []]
+    if not names:
+        return ""
+    parts = names[0].split(".")
+    for name in names[1:]:
+        other = name.split(".")
+        n = 0
+        while n < min(len(parts), len(other)) and parts[n] == other[n]:
+            n += 1
+        parts = parts[:n]
+    return ".".join(parts[:-1] if len(names) == 1 else parts)
+
+
+def known_heavy(device):
+    """(leer por partes, partes que se omiten) segun el firmware."""
+
+    skip = KNOWN_HEAVY.get(_firmware(device))
 
     return (skip is not None), tuple(skip or ())
 
@@ -321,7 +420,7 @@ def data_status(device, max_age=None, now=None):
 
 
 def _pending_refreshes(tasks):
-    return [t for t in tasks if t.get("name") == TASK_NAME]
+    return [t for t in tasks if t.get("name") in READ_TASKS]
 
 
 async def request_refresh(device_id, device, max_age=None, connection_request=True):
@@ -334,7 +433,7 @@ async def request_refresh(device_id, device, max_age=None, connection_request=Tr
     """
 
     pending = _pending_refreshes(await genieacs.get_tasks(device_id))
-    pending_names = [str(t.get("objectName") or "").rstrip(".") for t in pending]
+    pending_names = [task_branch(t) for t in pending]
 
     # GenieACS no conoce todas las ramas raiz de esta ONU (la raiz no tiene
     # _timestamp): sin ellas no se piden Layer3Forwarding, X_HW_Security...
@@ -358,11 +457,14 @@ async def request_refresh(device_id, device, max_age=None, connection_request=Tr
     skipped = [str(x) for x in (await get_redis().smembers(SKIP_KEY.format(device_id)) or ())]
     skipped += list(heavy_skip)
 
+    bad = set(known_bad(device))
+    bad.update(str(x) for x in (await get_redis().smembers(BAD_KEY.format(device_id)) or ()))
+
     def is_skipped(branch):
         return any(branch == x or branch.startswith(x + ".") for x in skipped)
 
     branches = [
-        b for b in plan_refresh(device, max_age=max_age, light=light, skip=tuple(skipped))
+        b for b in plan_refresh(device, max_age=max_age, light=light, skip=tuple(skipped) + tuple(bad))
         if not covered(b) and not is_skipped(b)
     ]
 
@@ -374,14 +476,21 @@ async def request_refresh(device_id, device, max_age=None, connection_request=Tr
             }
         return {"status": "fresh", "branches": [], "light": light}
 
+    tasks = []
+    for branch in branches:
+        if any(b.startswith(branch + ".") for b in bad):
+            tasks.extend(avoid_tasks(device, branch, bad))
+        else:
+            tasks.append({"name": TASK_NAME, "objectName": branch})
+
     # Se encolan todas y solo la ultima despierta a la ONU: GenieACS procesa
     # en esa misma sesion todas las tareas pendientes, en orden.
     answered = False
-    for i, branch in enumerate(branches):
-        last = i == len(branches) - 1
+    for i, task in enumerate(tasks):
+        last = i == len(tasks) - 1
         code = await genieacs.post_task(
             device_id,
-            {"name": TASK_NAME, "objectName": branch},
+            task,
             connection_request=connection_request and last,
         )
         if last and code == 200:
@@ -416,7 +525,7 @@ async def refresh_status(device_id):
 
             failed.append(
                 {
-                    "branch": task.get("objectName"),
+                    "branch": task_branch(task),
                     "code": fault.get("code"),
                     "message": (fault.get("message") or "")[:300],
                 }
@@ -424,6 +533,20 @@ async def refresh_status(device_id):
 
     if failed:
         redis = get_redis()
+
+        # Un fault que nombra un parametro de la rama (cwmp.9002 de la V2802ACT
+        # fw 260205 con PossibleChannels): esa rama se leera sin el.
+        for item in failed:
+            param = _param_path(item["message"])
+            if (
+                param
+                and str(item.get("code") or "").startswith("cwmp.")
+                and item.get("branch")
+                and param.startswith(item["branch"] + ".")
+            ):
+                await redis.sadd(BAD_KEY.format(device_id), param)
+                await redis.expire(BAD_KEY.format(device_id), BAD_TTL)
+
         was_light = bool(await redis.exists(LIGHT_KEY.format(device_id)))
         await redis.set(LIGHT_KEY.format(device_id), "1", ex=LIGHT_TTL)
 
