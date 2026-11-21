@@ -3,7 +3,7 @@
 Esta lista dice qué modelos funcionan con ACS-Control sobre GenieACS y qué se probó en cada uno.
 Se actualiza con cada modelo nuevo que se valida.
 
-Última actualización: 2026-11-19 (ZTE F6600P: puertos a WAN, Wi-Fi y acceso remoto por WAN).
+Última actualización: 2026-11-21 (VSOL V2802ACT fw V2.1.00-260205: lectura de Wi-Fi).
 
 ## Cómo leer esta tabla
 
@@ -186,6 +186,14 @@ Detalles técnicos:
 - Leer `DeviceInfo` completa da `too_many_commits`: ACS-Control la lee por partes.
 - `FireWallGrade` llega vacío: se muestra "No reportado".
 - `Layer3Forwarding` no publica rutas ni `DefaultConnectionService`.
+
+### VSOL V2802ACT fw V2.1.00-260205
+
+Lectura validada el 2026-11-21 (WAN, Wi-Fi 2.4 y 5 GHz, seguridad, equipos).
+
+- `getParameterValues` de `WLANConfiguration.{1-4}.PossibleChannels` (redes de 5 GHz) responde `cwmp.9002` y con él cae la lectura de toda la rama `LANDevice`. ACS-Control lee esas redes valor por valor sin ese parámetro (`KNOWN_BAD_PARAMS` en `device_refresh.py`).
+- En cualquier modelo, si la ONU responde un fault que nombra un parámetro concreto, ACS-Control lo recuerda 7 días y lee la rama esquivándolo.
+- El preset `bootstrap` de GenieACS (que relee todo el árbol) falla con el mismo parámetro tras un 0 BOOTSTRAP; no afecta a ACS-Control.
 
 ### ZTE F6600P
 
