@@ -11,8 +11,10 @@ Casos vistos:
 - inform en ZTE F6600P / HG102WT: la ONU rechaza PeriodicInformTime (9003) y
   con el el usuario/clave de connection request.
 
-"Destrabar" borra esos faults (GenieACS deja de reintentar) y despierta la
-ONU para que procese la cola. No cambia nada en la ONU ni en los presets.
+"Destrabar" borra esos faults (GenieACS deja de reintentar), encola una
+relectura del usuario/clave de connection request (tras un reset de fabrica
+quedan los de fabrica y GenieACS ya no puede despertar la ONU) y la despierta
+para que procese la cola. No cambia nada en la ONU ni en los presets.
 """
 
 from app.services.genieacs import genieacs
@@ -20,6 +22,11 @@ from app.services.genieacs import genieacs
 WAKE_PARAM = {
     "InternetGatewayDevice": "InternetGatewayDevice.DeviceInfo.UpTime",
     "Device": "Device.DeviceInfo.UpTime",
+}
+
+CR_PARAMS = {
+    root: [f"{root}.ManagementServer.ConnectionRequestUsername", f"{root}.ManagementServer.ConnectionRequestPassword"]
+    for root in ("InternetGatewayDevice", "Device")
 }
 
 EXPLAIN = {
@@ -94,6 +101,18 @@ async def unblock(device_id, device):
         await genieacs.delete_fault(fault["id"])
 
     root = "Device" if isinstance((device or {}).get("Device"), dict) and not (device or {}).get("InternetGatewayDevice") else "InternetGatewayDevice"
+
+    # Tras un reset de fabrica la ONU vuelve al usuario/clave de connection
+    # request de fabrica, pero GenieACS conserva los de antes y su preset
+    # inform no los reaplica: no puede despertarla y cada cambio espera al
+    # reporte periodico. Releerlos hace que GenieACS los vuelva a configurar
+    # en la proxima sesion (V2802ACT fw 260205, 2026-11-21). Solo lectura.
+    if not any(
+        t.get("name") == "getParameterValues" and t.get("parameterNames") == CR_PARAMS[root]
+        for t in await genieacs.get_tasks(device_id)
+    ):
+        await genieacs.post_task(device_id, {"name": "getParameterValues", "parameterNames": CR_PARAMS[root]})
+
     task = {"name": "getParameterValues", "parameterNames": [WAKE_PARAM[root]]}
     code = await genieacs.post_task(device_id, task, connection_request=True, wait_ms=30000)
 

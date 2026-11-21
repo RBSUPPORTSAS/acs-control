@@ -64,7 +64,9 @@ async def test_ficha_avisa_y_tecnico_destraba(client, genie):
     assert body["blocked"] is False and body["pending_tasks"] == 0
     # El fault de una tarea no es de un preset: no se toca aqui.
     assert genie["deleted"] == [BOOT["_id"]]
-    assert genie["posted"][0]["name"] == "getParameterValues"
+    # Relee usuario/clave de connection request (reset de fabrica) y despierta.
+    assert genie["posted"][0]["parameterNames"][0].endswith("ConnectionRequestUsername")
+    assert genie["posted"][-1]["parameterNames"] == ["InternetGatewayDevice.DeviceInfo.UpTime"]
 
     await login(client, "jefe")
     audits = (await client.get("/api/audit")).json()["audits"]
